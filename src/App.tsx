@@ -77,6 +77,8 @@ import ReceiptGeneratorPage from './pages/receipt-generator';
 import DeveloperDocsPage from './pages/developer-docs';
 import HushhAgentMailerPage from './pages/hushh-agent-mailer';
 import MobileBottomNav from './components/MobileBottomNav';
+import HushhAIPage from './hushh-ai/pages';
+import { LoginPage as HushhAILoginPage, SignupPage as HushhAISignupPage } from './hushh-ai/presentation/pages';
 
 // Google Analytics configuration
 const GA_TRACKING_ID = 'G-R58S9WWPM0';
@@ -91,9 +93,10 @@ const ContentWrapper = ({ children }: { children: ReactNode }) => {
   const isKycFlow = location.pathname.startsWith('/kyc-flow');
   const isA2APlayground = location.pathname.startsWith('/a2a-playground');
   const isInvestorGuide = location.pathname === '/investor-guide';
+  const isHushhAI = location.pathname.startsWith('/hushh-ai');
 
   return (
-    <div className={`${isHomePage || isAuthCallback || isUserRegistration || isOnboarding || isKycFlow || isA2APlayground || isInvestorGuide ? '' : 'mt-20'}`}>
+    <div className={`${isHomePage || isAuthCallback || isUserRegistration || isOnboarding || isKycFlow || isA2APlayground || isInvestorGuide || isHushhAI ? '' : 'mt-20'}`}>
       {children}
     </div>
   );
@@ -411,6 +414,9 @@ function App() {
               <Route path='/receipt-generator' element={<ReceiptGeneratorPage />} />
               <Route path='/developer-docs' element={<DeveloperDocsPage />} />
               <Route path='/hushh-agent-mailer' element={<HushhAgentMailerPage />} />
+              <Route path='/hushh-ai' element={<HushhAIPage />} />
+              <Route path='/hushh-ai/login' element={<HushhAILoginPage />} />
+              <Route path='/hushh-ai/signup' element={<HushhAISignupPage />} />
             </Routes>
           </ContentWrapper>
           <Footer />

@@ -9,16 +9,23 @@ export default async function appleSignIn() {
       return;
     }
 
-    const redirectTo =
-      resources.config.redirect_url || `${window.location.origin}/auth/callback`;
+    // Preserve redirect parameter from current URL (for Hushh AI and other modules)
+    const currentParams = new URLSearchParams(window.location.search);
+    const redirectPath = currentParams.get('redirect');
+    
+    let redirectTo = resources.config.redirect_url || `${window.location.origin}/auth/callback`;
+    
+    // If there's a redirect param, append it to the callback URL
+    if (redirectPath) {
+      redirectTo = `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirectPath)}`;
+    }
+    
     console.info("[Hushh][AppleSignIn] Starting Apple OAuth", { redirectTo });
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "apple",
       options: {
         redirectTo,
-        // PKCE helps on Safari/Face ID flows to ensure we can exchange the code for a session
-        flowType: "pkce",
         scopes: "name email",
       },
     });

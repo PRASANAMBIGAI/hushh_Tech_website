@@ -10,6 +10,19 @@ const AuthCallback: React.FC = () => {
   const [verificationStatus, setVerificationStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   
+  // Get custom redirect from URL param (for Hushh AI and other modules)
+  const customRedirect = searchParams.get('redirect');
+  
+  // Helper to determine final redirect destination
+  const getRedirectDestination = (hasCompletedOnboarding: boolean) => {
+    // If custom redirect is set (e.g., /hushh-ai), use it
+    if (customRedirect) {
+      return customRedirect;
+    }
+    // Otherwise, default behavior: onboarding or profile
+    return hasCompletedOnboarding ? '/hushh-user-profile' : '/onboarding/step-1';
+  };
+  
   useEffect(() => {
     const handleEmailVerification = async () => {
       try {
@@ -26,7 +39,7 @@ const AuthCallback: React.FC = () => {
         const error = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
         const code = searchParams.get('code');
-        console.info('[Hushh][AuthCallback] Callback hit', { type, hasCode: !!code, hasError: !!error });
+        console.info('[Hushh][AuthCallback] Callback hit', { type, hasCode: !!code, hasError: !!error, customRedirect });
         
         // If there's an error, display it
         if (error) {
@@ -101,15 +114,10 @@ const AuthCallback: React.FC = () => {
           // Email verification successful
           setVerificationStatus('success');
           
-          // Redirect based on onboarding status
+          // Redirect based on onboarding status (or custom redirect for Hushh AI)
           setTimeout(() => {
-            // If no record exists or not completed, go to onboarding
-            if (!onboardingData || !onboardingData.is_completed) {
-              navigate('/onboarding/step-1');
-            } else {
-              // User has completed onboarding, go to profile
-              navigate('/hushh-user-profile');
-            }
+            const hasCompletedOnboarding = onboardingData?.is_completed ?? false;
+            navigate(getRedirectDestination(hasCompletedOnboarding));
           }, 1200);
         } else {
           // Handle other auth types (OAuth, etc.)
@@ -144,18 +152,14 @@ const AuthCallback: React.FC = () => {
             
             setVerificationStatus('success');
             setTimeout(() => {
-              // If no record exists or not completed, go to onboarding
-              if (!onboardingData || !onboardingData.is_completed) {
-                navigate('/onboarding/step-1');
-              } else {
-                // User has completed onboarding, go to profile
-                navigate('/hushh-user-profile');
-              }
+              // Use custom redirect (e.g., /hushh-ai) or default based on onboarding status
+              const hasCompletedOnboarding = onboardingData?.is_completed ?? false;
+              navigate(getRedirectDestination(hasCompletedOnboarding));
             }, 1200);
           } else {
             setVerificationStatus('success');
             setTimeout(() => {
-              navigate('/onboarding/step-1');
+              navigate(getRedirectDestination(false));
             }, 1200);
           }
         }

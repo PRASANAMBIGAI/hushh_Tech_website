@@ -9,8 +9,16 @@ export default async function googleSignIn() {
       return;
     }
 
-    const redirectTo =
-      resources.config.redirect_url || `${window.location.origin}/auth/callback`;
+    // Preserve redirect parameter from current URL (for Hushh AI and other modules)
+    const currentParams = new URLSearchParams(window.location.search);
+    const redirectPath = currentParams.get('redirect');
+    
+    let redirectTo = resources.config.redirect_url || `${window.location.origin}/auth/callback`;
+    
+    // If there's a redirect param, append it to the callback URL
+    if (redirectPath) {
+      redirectTo = `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirectPath)}`;
+    }
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -32,4 +40,3 @@ export default async function googleSignIn() {
     console.error("Supabase Google Sign-In failed:", error);
   }
 }
-

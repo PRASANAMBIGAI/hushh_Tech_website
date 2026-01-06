@@ -1,0 +1,698 @@
+/**
+ * Hushh AI - Main Chat Page
+ * Claude-style UI with cream/white theme
+ */
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Box, Flex, Text, Input, IconButton, VStack, HStack, Avatar, Spinner, useToast } from '@chakra-ui/react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { THEME, BRANDING, LIMITS } from '../core/constants';
+import type { HushhChat, HushhMessage, MediaLimits, ChatState } from '../core/types';
+import * as service from '../services/hushhAIService';
+import config from '../../resources/config/config';
+
+const MotionBox = motion(Box);
+
+// ============================================
+// Main Component
+// ============================================
+
+export default function HushhAIPage() {
+  const navigate = useNavigate();
+  const toast = useToast();
+  
+  // State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [chats, setChats] = useState<HushhChat[]>([]);
+  const [currentChat, setCurrentChat] = useState<HushhChat | null>(null);
+  const [messages, setMessages] = useState<HushhMessage[]>([]);
+  const [mediaLimits, setMediaLimits] = useState<MediaLimits | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [chatState, setChatState] = useState<ChatState>({
+    isTyping: false,
+    isSending: false,
+    isStreaming: false,
+    streamingContent: '',
+    error: null,
+  });
+  const [inputValue, setInputValue] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ============================================
+  // Effects
+  // ============================================
+
+  // Check auth on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = await service.isAuthenticated();
+      if (!authenticated) {
+        navigate('/hushh-ai/login');
+        return;
+      }
+      setIsAuthenticated(true);
+      await loadInitialData();
+      setIsLoading(false);
+    };
+    
+    checkAuth();
+    
+    // Subscribe to auth changes
+    const unsubscribe = service.onAuthChange((loggedIn) => {
+      if (!loggedIn) {
+        navigate('/hushh-ai/login');
+      }
+    });
+    
+    return unsubscribe;
+  }, [navigate]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, chatState.streamingContent]);
+
+  // ============================================
+  // Data Loading
+  // ============================================
+
+  const loadInitialData = async () => {
+    const user = await service.getOrCreateUser();
+    if (user) {
+      setUserId(user.id);
+    }
+    const [chatList, limits] = await Promise.all([
+      service.getChats(),
+      service.getMediaLimits(),
+    ]);
+    setChats(chatList);
+    setMediaLimits(limits);
+  };
+
+  const loadChat = async (chatId: string) => {
+    const [chat, msgs] = await Promise.all([
+      service.getChatById(chatId),
+      service.getMessages(chatId),
+    ]);
+    if (chat) {
+      setCurrentChat(chat);
+      setMessages(msgs);
+    }
+  };
+
+  // ============================================
+  // Handlers
+  // ============================================
+
+  const handleNewChat = async () => {
+    const chat = await service.createChat();
+    if (chat) {
+      setChats((prev) => [chat, ...prev]);
+      setCurrentChat(chat);
+      setMessages([]);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleSelectChat = async (chat: HushhChat) => {
+    setCurrentChat(chat);
+    await loadChat(chat.id);
+  };
+
+  const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const success = await service.deleteChat(chatId);
+    if (success) {
+      setChats((prev) => prev.filter((c) => c.id !== chatId));
+      if (currentChat?.id === chatId) {
+        setCurrentChat(null);
+        setMessages([]);
+      }
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length + selectedFiles.length > mediaLimits?.remainingUploads! || 0) {
+      toast({
+        title: BRANDING.messages.uploadLimit,
+        status: 'warning',
+        duration: 3000,
+      });
+      return;
+    }
+    setSelectedFiles((prev) => [...prev, ...files]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() && selectedFiles.length === 0) return;
+    if (chatState.isSending) return;
+
+    let chatId = currentChat?.id;
+    
+    // Create new chat if none selected
+    if (!chatId) {
+      const newChat = await service.createChat(inputValue.slice(0, 50));
+      if (!newChat) return;
+      chatId = newChat.id;
+      setCurrentChat(newChat);
+      setChats((prev) => [newChat, ...prev]);
+    }
+
+    setChatState((prev) => ({ ...prev, isSending: true, error: null }));
+
+    try {
+      // Upload files if any
+      const mediaUrls: string[] = [];
+      for (const file of selectedFiles) {
+        const url = await service.uploadMedia(file);
+        if (url) mediaUrls.push(url);
+      }
+      setSelectedFiles([]);
+
+      // Add user message
+      const userMessage = await service.addMessage(chatId, 'user', inputValue, mediaUrls);
+      if (userMessage) {
+        setMessages((prev) => [...prev, userMessage]);
+      }
+
+      const userInput = inputValue;
+      setInputValue('');
+
+      // Call AI
+      setChatState((prev) => ({ ...prev, isStreaming: true, streamingContent: '' }));
+      
+      await streamAIResponse(chatId, userInput, mediaUrls, userId);
+
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setChatState((prev) => ({ 
+        ...prev, 
+        error: BRANDING.messages.error,
+        isSending: false,
+        isStreaming: false,
+      }));
+    }
+  };
+
+  const streamAIResponse = async (chatId: string, message: string, mediaUrls: string[], currentUserId: string | null) => {
+    try {
+      const supabaseUrl = config.SUPABASE_URL;
+      const supabaseKey = config.SUPABASE_ANON_KEY;
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/hushh-ai-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({
+          message,
+          chatId,
+          userId: currentUserId, // For Redis rate limiting
+          mediaUrls,
+          history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('AI response failed');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        fullContent += chunk;
+        setChatState((prev) => ({ ...prev, streamingContent: fullContent }));
+      }
+
+      // Save assistant message
+      const assistantMessage = await service.addMessage(chatId, 'assistant', fullContent);
+      if (assistantMessage) {
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
+
+      setChatState((prev) => ({ 
+        ...prev, 
+        isSending: false, 
+        isStreaming: false, 
+        streamingContent: '' 
+      }));
+
+      // Refresh media limits
+      const limits = await service.getMediaLimits();
+      setMediaLimits(limits);
+
+    } catch (error) {
+      console.error('Streaming error:', error);
+      setChatState((prev) => ({ 
+        ...prev, 
+        error: BRANDING.messages.error,
+        isSending: false,
+        isStreaming: false,
+        streamingContent: '',
+      }));
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  // ============================================
+  // Render
+  // ============================================
+
+  if (isLoading) {
+    return (
+      <Flex 
+        h="100vh" 
+        bg={THEME.colors.background} 
+        align="center" 
+        justify="center"
+      >
+        <VStack spacing={4}>
+          <Spinner size="lg" color={THEME.colors.accent} />
+          <Text color={THEME.colors.textSecondary}>Loading Hushh AI...</Text>
+        </VStack>
+      </Flex>
+    );
+  }
+
+  return (
+    <Flex h="100vh" bg={THEME.colors.background}>
+      {/* Sidebar */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <MotionBox
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 280, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            bg={THEME.colors.sidebarBg}
+            borderRight={`1px solid ${THEME.colors.border}`}
+            overflow="hidden"
+          >
+            <VStack h="full" p={4} spacing={4} align="stretch">
+              {/* Header */}
+              <HStack justify="space-between">
+                <Text 
+                  fontSize={THEME.fontSizes.lg} 
+                  fontWeight={THEME.fontWeights.semibold}
+                  color={THEME.colors.textPrimary}
+                >
+                  {BRANDING.productName}
+                </Text>
+                <IconButton
+                  aria-label="Close sidebar"
+                  icon={<SidebarIcon />}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSidebarOpen(false)}
+                />
+              </HStack>
+
+              {/* New Chat Button */}
+              <Box
+                as="button"
+                w="full"
+                p={3}
+                borderRadius={THEME.borderRadius.md}
+                border={`1px solid ${THEME.colors.border}`}
+                bg={THEME.colors.surface}
+                _hover={{ bg: THEME.colors.surfaceHover }}
+                transition={THEME.transitions.fast}
+                onClick={handleNewChat}
+              >
+                <HStack>
+                  <PlusIcon />
+                  <Text fontSize={THEME.fontSizes.sm}>{BRANDING.messages.newChat}</Text>
+                </HStack>
+              </Box>
+
+              {/* Chat List */}
+              <VStack 
+                flex={1} 
+                spacing={1} 
+                align="stretch" 
+                overflowY="auto"
+                css={{
+                  '&::-webkit-scrollbar': { width: '4px' },
+                  '&::-webkit-scrollbar-thumb': { background: THEME.colors.border, borderRadius: '2px' },
+                }}
+              >
+                {chats.map((chat) => (
+                  <HStack
+                    key={chat.id}
+                    p={3}
+                    borderRadius={THEME.borderRadius.sm}
+                    bg={currentChat?.id === chat.id ? THEME.colors.sidebarActive : 'transparent'}
+                    _hover={{ bg: THEME.colors.sidebarHover }}
+                    cursor="pointer"
+                    onClick={() => handleSelectChat(chat)}
+                    justify="space-between"
+                  >
+                    <Text 
+                      fontSize={THEME.fontSizes.sm} 
+                      noOfLines={1}
+                      color={THEME.colors.textPrimary}
+                    >
+                      {chat.title}
+                    </Text>
+                    <IconButton
+                      aria-label="Delete chat"
+                      icon={<TrashIcon />}
+                      variant="ghost"
+                      size="xs"
+                      opacity={0.5}
+                      _hover={{ opacity: 1 }}
+                      onClick={(e) => handleDeleteChat(chat.id, e)}
+                    />
+                  </HStack>
+                ))}
+              </VStack>
+
+              {/* Media Limit Indicator */}
+              {mediaLimits && (
+                <Box p={3} bg={THEME.colors.backgroundSecondary} borderRadius={THEME.borderRadius.sm}>
+                  <Text fontSize={THEME.fontSizes.xs} color={THEME.colors.textSecondary}>
+                    Media uploads today: {mediaLimits.dailyUploads}/{mediaLimits.maxDailyUploads}
+                  </Text>
+                  <Box 
+                    mt={2} 
+                    h="4px" 
+                    bg={THEME.colors.border} 
+                    borderRadius="full"
+                    overflow="hidden"
+                  >
+                    <Box 
+                      h="full" 
+                      w={`${(mediaLimits.dailyUploads / mediaLimits.maxDailyUploads) * 100}%`}
+                      bg={THEME.colors.accent}
+                      transition={THEME.transitions.normal}
+                    />
+                  </Box>
+                </Box>
+              )}
+            </VStack>
+          </MotionBox>
+        )}
+      </AnimatePresence>
+
+      {/* Main Chat Area */}
+      <Flex flex={1} direction="column">
+        {/* Top Bar */}
+        <HStack 
+          p={4} 
+          borderBottom={`1px solid ${THEME.colors.border}`}
+          bg={THEME.colors.surface}
+        >
+          {!sidebarOpen && (
+            <IconButton
+              aria-label="Open sidebar"
+              icon={<SidebarIcon />}
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen(true)}
+            />
+          )}
+          <Text 
+            fontWeight={THEME.fontWeights.medium}
+            color={THEME.colors.textPrimary}
+          >
+            {currentChat?.title || BRANDING.productName}
+          </Text>
+        </HStack>
+
+        {/* Messages */}
+        <VStack 
+          flex={1} 
+          p={6} 
+          spacing={6} 
+          overflowY="auto"
+          align="stretch"
+          css={{
+            '&::-webkit-scrollbar': { width: '6px' },
+            '&::-webkit-scrollbar-thumb': { background: THEME.colors.border, borderRadius: '3px' },
+          }}
+        >
+          {messages.length === 0 && !currentChat && (
+            <VStack flex={1} justify="center" spacing={4}>
+              <Box 
+                w={16} 
+                h={16} 
+                borderRadius="full" 
+                bg={THEME.colors.accent}
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text fontSize="2xl" color="white">H</Text>
+              </Box>
+              <Text 
+                fontSize={THEME.fontSizes.xl} 
+                fontWeight={THEME.fontWeights.semibold}
+                color={THEME.colors.textPrimary}
+              >
+                {BRANDING.messages.welcome}
+              </Text>
+            </VStack>
+          )}
+
+          {messages.map((msg) => (
+            <MessageBubble key={msg.id} message={msg} />
+          ))}
+
+          {/* Streaming Response */}
+          {chatState.isStreaming && chatState.streamingContent && (
+            <MessageBubble 
+              message={{
+                id: 'streaming',
+                chatId: currentChat?.id || '',
+                role: 'assistant',
+                content: chatState.streamingContent,
+                mediaUrls: [],
+                createdAt: new Date(),
+              }}
+              isStreaming
+            />
+          )}
+
+          {/* Thinking Indicator */}
+          {chatState.isSending && !chatState.streamingContent && (
+            <HStack spacing={2} p={4}>
+              <Spinner size="sm" color={THEME.colors.accent} />
+              <Text color={THEME.colors.textSecondary} fontSize={THEME.fontSizes.sm}>
+                {BRANDING.messages.thinking}
+              </Text>
+            </HStack>
+          )}
+
+          <div ref={messagesEndRef} />
+        </VStack>
+
+        {/* Input Area */}
+        <Box p={4} bg={THEME.colors.surface} borderTop={`1px solid ${THEME.colors.border}`}>
+          {/* Selected Files Preview */}
+          {selectedFiles.length > 0 && (
+            <HStack mb={3} spacing={2} flexWrap="wrap">
+              {selectedFiles.map((file, index) => (
+                <HStack 
+                  key={index}
+                  p={2}
+                  bg={THEME.colors.backgroundSecondary}
+                  borderRadius={THEME.borderRadius.sm}
+                  spacing={2}
+                >
+                  <Text fontSize={THEME.fontSizes.xs} noOfLines={1} maxW="100px">
+                    {file.name}
+                  </Text>
+                  <IconButton
+                    aria-label="Remove file"
+                    icon={<CloseIcon />}
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => handleRemoveFile(index)}
+                  />
+                </HStack>
+              ))}
+            </HStack>
+          )}
+
+          {/* Input Bar */}
+          <HStack 
+            p={3}
+            bg={THEME.colors.background}
+            borderRadius={THEME.borderRadius.lg}
+            border={`1px solid ${THEME.colors.border}`}
+            _focusWithin={{ borderColor: THEME.colors.borderFocus }}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              multiple
+              accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+              onChange={handleFileSelect}
+            />
+            <IconButton
+              aria-label="Attach file"
+              icon={<AttachIcon />}
+              variant="ghost"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              isDisabled={mediaLimits?.remainingUploads === 0}
+            />
+            <Input
+              ref={inputRef}
+              flex={1}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={BRANDING.placeholders.input}
+              variant="unstyled"
+              fontSize={THEME.fontSizes.md}
+              _placeholder={{ color: THEME.colors.textPlaceholder }}
+            />
+            <IconButton
+              aria-label="Send message"
+              icon={<SendIcon />}
+              variant="ghost"
+              size="sm"
+              colorScheme="orange"
+              onClick={handleSendMessage}
+              isDisabled={chatState.isSending || (!inputValue.trim() && selectedFiles.length === 0)}
+            />
+          </HStack>
+
+          {/* Error Message */}
+          {chatState.error && (
+            <Text mt={2} color={THEME.colors.error} fontSize={THEME.fontSizes.sm}>
+              {chatState.error}
+            </Text>
+          )}
+        </Box>
+      </Flex>
+    </Flex>
+  );
+}
+
+// ============================================
+// Message Bubble Component
+// ============================================
+
+interface MessageBubbleProps {
+  message: HushhMessage;
+  isStreaming?: boolean;
+}
+
+function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
+  const isUser = message.role === 'user';
+
+  return (
+    <Flex justify={isUser ? 'flex-end' : 'flex-start'}>
+      <Box
+        maxW="70%"
+        p={4}
+        borderRadius={THEME.borderRadius.lg}
+        bg={isUser ? THEME.colors.userBubble : THEME.colors.assistantBubble}
+        boxShadow={isUser ? 'none' : THEME.shadows.sm}
+      >
+        {/* Media */}
+        {message.mediaUrls.length > 0 && (
+          <VStack mb={3} spacing={2} align="stretch">
+            {message.mediaUrls.map((url, i) => (
+              <Box key={i} borderRadius={THEME.borderRadius.sm} overflow="hidden">
+                {url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                  <img src={url} alt="Uploaded" style={{ maxWidth: '100%', borderRadius: '8px' }} />
+                ) : (
+                  <a href={url} target="_blank" rel="noopener noreferrer">
+                    <Text color={THEME.colors.accent} fontSize={THEME.fontSizes.sm}>
+                      📎 Attachment
+                    </Text>
+                  </a>
+                )}
+              </Box>
+            ))}
+          </VStack>
+        )}
+
+        {/* Content */}
+        <Text 
+          fontSize={THEME.fontSizes.md} 
+          color={THEME.colors.textPrimary}
+          whiteSpace="pre-wrap"
+        >
+          {message.content}
+          {isStreaming && (
+            <Box as="span" display="inline-block" w="8px" h="16px" bg={THEME.colors.accent} ml={1} animation="blink 1s infinite" />
+          )}
+        </Text>
+      </Box>
+    </Flex>
+  );
+}
+
+// ============================================
+// Icons
+// ============================================
+
+const SidebarIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <line x1="9" y1="3" x2="9" y2="21" />
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+const AttachIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+  </svg>
+);
+
+const SendIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="22" y1="2" x2="11" y2="13" />
+    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);

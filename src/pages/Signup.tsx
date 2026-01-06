@@ -44,15 +44,23 @@ const logoVariants = {
 
 export default function Signup() {
   const navigate = useNavigate();
+  
+  // Get redirect parameter from URL (for Hushh AI and other modules)
+  const getRedirectPath = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('redirect') || '/hushh-user-profile';
+  };
 
   useEffect(() => {
     if (!config.supabaseClient) {
       return;
     }
+    
+    const redirectPath = getRedirectPath();
 
     config.supabaseClient.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate("/hushh-user-profile");
+        navigate(redirectPath);
       }
     });
 
@@ -60,7 +68,7 @@ export default function Signup() {
       data: { subscription },
     } = config.supabaseClient.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        navigate("/hushh-user-profile");
+        navigate(redirectPath);
       }
     });
 
