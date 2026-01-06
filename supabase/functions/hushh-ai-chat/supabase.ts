@@ -87,7 +87,6 @@ export async function checkRateLimit(
 
 /**
  * Check media upload limit (20 per day)
- * Uses existing table with columns: user_id, daily_uploads, last_reset
  */
 export async function checkMediaUploadLimit(userId: string): Promise<{
   allowed: boolean;
@@ -96,37 +95,22 @@ export async function checkMediaUploadLimit(userId: string): Promise<{
   resetsAt: string;
 }> {
   try {
-    const now = new Date();
-    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const maxUploads = 20;
     
-    // Get current limit record
+    // Get current count for today
     const { data, error } = await supabase
       .from('hushh_ai_media_limits')
-      .select('daily_uploads, last_reset')
+      .select('upload_count')
       .eq('user_id', userId)
+      .eq('upload_date', today)
       .single();
     
     if (error && error.code !== 'PGRST116') {
       console.error('Media limit check error:', error);
     }
     
-    let used = 0;
-    
-    if (data) {
-      // Check if last_reset was today
-      const lastResetDate = data.last_reset 
-        ? new Date(data.last_reset).toISOString().split('T')[0] 
-        : null;
-      
-      if (lastResetDate === today) {
-        // Same day, use current count
-        used = data.daily_uploads || 0;
-      } else {
-        // Different day, count should be reset
-        used = 0;
-      }
-    }
+    const used = data?.upload_count || 0;
     
     if (used >= maxUploads) {
       // Calculate reset time (midnight UTC)
@@ -156,56 +140,43 @@ export async function checkMediaUploadLimit(userId: string): Promise<{
 
 /**
  * Increment media upload count
- * Uses existing table with columns: user_id, daily_uploads, last_reset
  */
 export async function incrementMediaUpload(userId: string): Promise<number> {
   try {
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
     
-    // Get existing record
-    const { data: existing } = await supabase
+    // Upsert media limit record
+    const { data, error } = await supabase
       .from('hushh_ai_media_limits')
-      .select('daily_uploads, last_reset')
-      .eq('user_id', userId)
+      .upsert({
+        user_id: userId,
+        upload_date: today,
+        upload_count: 1,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,upload_date',
+      })
+      .select('upload_count')
       .single();
     
-    let newCount = 1;
-    
-    if (existing) {
-      // Check if last_reset was today
-      const lastResetDate = existing.last_reset 
-        ? new Date(existing.last_reset).toISOString().split('T')[0] 
-        : null;
-      
-      if (lastResetDate === today) {
-        // Same day, increment
-        newCount = (existing.daily_uploads || 0) + 1;
-      } else {
-        // New day, reset to 1
-        newCount = 1;
-      }
-      
-      // Update existing record
-      await supabase
-        .from('hushh_ai_media_limits')
-        .update({ 
-          daily_uploads: newCount,
-          last_reset: now.toISOString()
-        })
-        .eq('user_id', userId);
-    } else {
-      // Create new record
-      await supabase
-        .from('hushh_ai_media_limits')
-        .insert({
-          user_id: userId,
-          daily_uploads: 1,
-          last_reset: now.toISOString(),
-        });
+    if (error) {
+      // If upsert failed, try to increment
+      const { data: updated } = await supabase
+        .rpc('increment_media_count', { p_user_id: userId, p_date: today });
+      return updated || 1;
     }
     
-    return newCount;
+    // Increment the count
+    await supabase
+      .from('hushh_ai_media_limits')
+      .update({ 
+        upload_count: (data?.upload_count || 0) + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .eq('upload_date', today);
+    
+    return (data?.upload_count || 0) + 1;
   } catch (error) {
     console.error('Increment media error:', error);
     return 1;
