@@ -130,10 +130,10 @@ export default function HushhAISignupPage() {
         {/* Header Text */}
         <motion.div className="text-center mb-8" variants={itemVariants}>
           <h1 className="text-[28px] font-bold leading-tight mb-2 text-[#131811]">
-            Create Hushh AI account
+            Join Hushh AI
           </h1>
           <p className="text-gray-500 text-base font-medium leading-normal">
-            Start chatting with AI for free
+            Your thoughtful AI companion awaits
           </p>
         </motion.div>
 

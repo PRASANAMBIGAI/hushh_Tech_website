@@ -105,11 +105,11 @@ export const THEME = {
 export const BRANDING = {
   productName: 'Hushh AI',
   aiName: 'Hushh',
-  tagline: 'Your Free AI Assistant',
+  tagline: 'Your thoughtful AI companion',
   
   messages: {
     thinking: 'Hushh is thinking...',
-    welcome: "Hi! I'm Hushh, your free AI assistant. How can I help you today?",
+    welcome: "Hello! I'm Hushh, here to help you. What would you like to chat about?",
     error: "Hushh couldn't respond. Please try again.",
     uploadLimit: 'Daily upload limit reached. Try again tomorrow!',
     newChat: 'New Chat',

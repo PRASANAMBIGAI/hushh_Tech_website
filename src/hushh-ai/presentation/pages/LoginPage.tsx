@@ -133,7 +133,7 @@ export default function HushhAILoginPage() {
             Welcome to Hushh AI
           </h1>
           <p className="text-gray-500 text-base font-medium leading-normal">
-            Free AI chat powered by Google Gemini
+            Your thoughtful AI companion
           </p>
         </motion.div>
 
