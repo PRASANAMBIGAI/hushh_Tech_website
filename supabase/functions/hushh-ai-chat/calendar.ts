@@ -121,20 +121,29 @@ function parseDateTime(text: string): { startDateTime: string; endDateTime: stri
   let startDate = new Date();
   let duration = 30; // Default 30 minutes
 
+  // Reset time to avoid midnight edge cases
+  startDate.setHours(10, 0, 0, 0); // Default to 10 AM
+
   // Check for "tomorrow"
   if (text.toLowerCase().includes('tomorrow')) {
-    startDate.setDate(startDate.getDate() + 1);
-  }
-  
-  // Check for "next week"
-  if (text.toLowerCase().includes('next week')) {
-    startDate.setDate(startDate.getDate() + 7);
+    startDate.setDate(now.getDate() + 1);
+    startDate.setHours(10, 0, 0, 0); // Reset to morning
   }
 
-  // Check for specific day names
+  // Check for "next week"
+  if (text.toLowerCase().includes('next week')) {
+    startDate.setDate(now.getDate() + 7);
+  }
+
+  // Check for "next monday", "next tuesday", etc.
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   for (let i = 0; i < days.length; i++) {
-    if (text.toLowerCase().includes(days[i])) {
+    if (text.toLowerCase().includes('next ' + days[i])) {
+      const currentDay = now.getDay();
+      const daysUntil = (i - currentDay + 7) % 7 || 7;
+      startDate.setDate(now.getDate() + daysUntil);
+      break;
+    } else if (text.toLowerCase().includes(days[i])) {
       const currentDay = now.getDay();
       const daysUntil = (i - currentDay + 7) % 7 || 7;
       startDate.setDate(now.getDate() + daysUntil);
@@ -148,13 +157,23 @@ function parseDateTime(text: string): { startDateTime: string; endDateTime: stri
     let hours = parseInt(timeMatch[1]);
     const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
     const meridiem = timeMatch[3]?.toLowerCase();
-    
+
     if (meridiem === 'pm' && hours < 12) hours += 12;
     if (meridiem === 'am' && hours === 12) hours = 0;
-    
+
     startDate.setHours(hours, minutes, 0, 0);
-  } else {
-    // Default to 10 AM if no time specified
+  }
+
+  // Validate: Don't schedule in the past
+  if (startDate < now) {
+    console.warn('Detected past date, moving to tomorrow');
+    startDate.setDate(startDate.getDate() + 1);
+  }
+
+  // Edge case: If scheduling "today" but time is past business hours
+  if (text.toLowerCase().includes('today') && now.getHours() >= 18) {
+    console.warn('Past business hours, scheduling for tomorrow morning');
+    startDate.setDate(now.getDate() + 1);
     startDate.setHours(10, 0, 0, 0);
   }
 

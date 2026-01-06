@@ -8,8 +8,10 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Flex, Text, Input, IconButton, VStack, HStack, Avatar, Spinner, useToast, useDisclosure, Menu, MenuButton, MenuList, MenuItem, Divider, Skeleton, Tooltip } from '@chakra-ui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { THEME, BRANDING, LIMITS } from '../core/constants';
-import type { HushhChat, HushhMessage, MediaLimits, ChatState } from '../core/types';
+import type { HushhChat, HushhMessage, MediaLimits, ChatState, CalendarEventMetadata, MessageMetadata } from '../core/types';
 import * as service from '../services/hushhAIService';
+import { CalendarEventCard } from '../presentation/components/CalendarEventCard';
+import { CalendarEventErrorBoundary } from '../presentation/components/CalendarEventErrorBoundary';
 import config from '../../resources/config/config';
 import { trackProductUsage, PRODUCTS } from '../../services/productUsage/trackProductUsage';
 import DeleteAccountModal from '../../components/DeleteAccountModal';
@@ -286,6 +288,48 @@ export default function HushhAIPage() {
         throw new Error('AI response failed');
       }
 
+      // Check for calendar event metadata in response headers
+      const calendarEventHeader = response.headers.get('X-Calendar-Event');
+      const calendarEventDataHeader = response.headers.get('X-Calendar-Event-Data');
+
+      // Capture metadata in closure to prevent race conditions
+      const capturedMetadata: MessageMetadata | undefined = (() => {
+        if (calendarEventHeader === 'created' && calendarEventDataHeader) {
+          try {
+            // Validate header size (prevent truncated JSON)
+            if (!calendarEventDataHeader.trim() || calendarEventDataHeader.length > 7000) {
+              throw new Error('Invalid calendar event header size');
+            }
+
+            const eventData = JSON.parse(calendarEventDataHeader);
+
+            // Validate required fields
+            if (!eventData.id || !eventData.summary || !eventData.startTime || !eventData.endTime) {
+              throw new Error('Missing required calendar event fields');
+            }
+
+            // Validate date formats
+            if (isNaN(Date.parse(eventData.startTime)) || isNaN(Date.parse(eventData.endTime))) {
+              throw new Error('Invalid date format in calendar event');
+            }
+
+            console.log('Calendar event created:', eventData);
+            return { calendarEvent: eventData as CalendarEventMetadata };
+          } catch (e) {
+            console.error('Failed to parse calendar event data:', e);
+            toast({
+              title: 'Calendar event created but display failed',
+              description: 'Please check your Google Calendar directly',
+              status: 'warning',
+              duration: 5000,
+              isClosable: true,
+            });
+            return undefined;
+          }
+        }
+        return undefined;
+      })();
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
@@ -299,8 +343,8 @@ export default function HushhAIPage() {
         setChatState((prev) => ({ ...prev, streamingContent: fullContent }));
       }
 
-      // Save assistant message
-      const assistantMessage = await service.addMessage(chatId, 'assistant', fullContent);
+      // Save assistant message with captured metadata (prevents race conditions)
+      const assistantMessage = await service.addMessage(chatId, 'assistant', fullContent, [], capturedMetadata);
       if (assistantMessage) {
         setMessages((prev) => [...prev, assistantMessage]);
       }
@@ -833,9 +877,10 @@ interface MessageBubbleProps {
 
 function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const hasCalendarEvent = message.metadata?.calendarEvent;
 
   return (
-    <Flex justify={isUser ? 'flex-end' : 'flex-start'}>
+    <Flex justify={isUser ? 'flex-end' : 'flex-start'} direction="column" align={isUser ? 'flex-end' : 'flex-start'}>
       <Box
         maxW="70%"
         p={4}
@@ -874,6 +919,15 @@ function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
           )}
         </Text>
       </Box>
+
+      {/* Calendar Event Card */}
+      {hasCalendarEvent && (
+        <Box mt={2} maxW="70%">
+          <CalendarEventErrorBoundary>
+            <CalendarEventCard event={message.metadata!.calendarEvent!} />
+          </CalendarEventErrorBoundary>
+        </Box>
+      )}
     </Flex>
   );
 }

@@ -6,9 +6,9 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { 
-  checkRateLimit, 
-  checkMediaUploadLimit, 
+import {
+  checkRateLimit,
+  checkMediaUploadLimit,
   incrementMediaUpload,
   cacheContext,
   getCachedContext,
@@ -20,6 +20,7 @@ import {
   clearStreamState,
 } from './supabase.ts';
 import { createCalendarEvent, formatEventResponse, CalendarEventResult } from './calendar.ts';
+import { retryWithBackoff } from './retryUtils.ts';
 
 // CORS headers
 const corsHeaders = {
@@ -27,6 +28,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+// Helper function to sanitize calendar data for header (prevent truncation)
+function sanitizeCalendarDataForHeader(data: any): string {
+  const MAX_HEADER_SIZE = 7000; // 7KB safety margin
+
+  let json = JSON.stringify(data);
+
+  if (json.length <= MAX_HEADER_SIZE) {
+    return json;
+  }
+
+  console.warn(`Calendar data too large (${json.length} bytes), truncating...`);
+
+  // Truncate attendees list
+  if (data.attendees && data.attendees.length > 20) {
+    data.attendees = data.attendees.slice(0, 20);
+    data.attendeesTruncated = true;
+  }
+
+  // Truncate description
+  if (data.description && data.description.length > 500) {
+    data.description = data.description.slice(0, 500) + '... (truncated)';
+  }
+
+  json = JSON.stringify(data);
+
+  if (json.length > MAX_HEADER_SIZE) {
+    console.error('Even after truncation, data too large. Removing optional fields.');
+    delete data.description;
+    delete data.location;
+    json = JSON.stringify(data);
+  }
+
+  return json;
+}
 
 // GCP Configuration
 const GCP_PROJECT = 'hushone-app';
@@ -296,21 +332,21 @@ serve(async (req: Request) => {
       console.log('Calendar intent detected! Message:', message);
       console.log('Organizer email:', organizerEmail);
 
-      // Create the calendar event with retry logic
-      let calendarResult = await createCalendarEvent({
-        message,
-        organizerEmail,
-      });
-
-      // Retry once if initial attempt failed
-      if (!calendarResult.success) {
-        console.log('Calendar creation failed, retrying after 1 second...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        calendarResult = await createCalendarEvent({
+      // Create the calendar event with exponential backoff retry logic
+      const calendarResult = await retryWithBackoff(
+        () => createCalendarEvent({
           message,
           organizerEmail,
-        });
-      }
+        }),
+        {
+          maxRetries: 3,
+          baseDelay: 1000,
+          maxDelay: 10000,
+        }
+      ).catch(error => ({
+        success: false,
+        error: error.message || 'Failed to create calendar event',
+      } as CalendarEventResult));
 
       // Format the response
       const calendarResponse = formatEventResponse(calendarResult);
@@ -334,7 +370,7 @@ serve(async (req: Request) => {
         await cacheContext(chatId, updatedHistory, 3600);
       }
       
-      // Return the calendar response
+      // Return the calendar response with full event metadata
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -342,6 +378,17 @@ serve(async (req: Request) => {
           controller.close();
         },
       });
+
+      // Build calendar event metadata for frontend to consume
+      const calendarEventData = calendarResult.success ? {
+        id: calendarResult.eventId,
+        summary: calendarResult.summary,
+        startTime: calendarResult.startTime,
+        endTime: calendarResult.endTime,
+        meetLink: calendarResult.meetLink,
+        htmlLink: calendarResult.htmlLink,
+        attendees: calendarResult.attendees,
+      } : null;
       
       return new Response(stream, {
         headers: {
@@ -350,6 +397,9 @@ serve(async (req: Request) => {
           'X-Calendar-Event': calendarResult.success ? 'created' : 'failed',
           'X-Event-Id': calendarResult.eventId || '',
           'X-Meet-Link': calendarResult.meetLink || '',
+          'X-Calendar-Event-Data': calendarEventData
+            ? sanitizeCalendarDataForHeader(calendarEventData)
+            : '',
         },
       });
     }

@@ -4,7 +4,7 @@
  */
 
 import config from '../../resources/config/config';
-import type { HushhAIUser, HushhChat, HushhMessage, MediaLimits } from '../core/types';
+import type { HushhAIUser, HushhChat, HushhMessage, MediaLimits, MessageMetadata } from '../core/types';
 import { LIMITS } from '../core/constants';
 
 const supabase = config.supabaseClient;
@@ -211,18 +211,32 @@ export async function addMessage(
   chatId: string,
   role: 'user' | 'assistant',
   content: string,
-  mediaUrls: string[] = []
+  mediaUrls: string[] = [],
+  metadata?: MessageMetadata
 ): Promise<HushhMessage | null> {
   if (!supabase) return null;
 
+  const insertData: {
+    chat_id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    media_urls: string[];
+    metadata?: Record<string, unknown>;
+  } = {
+    chat_id: chatId,
+    role,
+    content,
+    media_urls: mediaUrls,
+  };
+
+  // Only include metadata if it exists and has values
+  if (metadata && Object.keys(metadata).length > 0) {
+    insertData.metadata = metadata as Record<string, unknown>;
+  }
+
   const { data, error } = await supabase
     .from('hushh_ai_messages')
-    .insert({
-      chat_id: chatId,
-      role,
-      content,
-      media_urls: mediaUrls,
-    })
+    .insert(insertData)
     .select()
     .single();
 
@@ -487,6 +501,7 @@ interface DbMessage {
   content: string;
   media_urls: string[];
   created_at: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface DbMediaLimits {
@@ -529,6 +544,7 @@ function mapMessage(db: DbMessage): HushhMessage {
     content: db.content,
     mediaUrls: db.media_urls || [],
     createdAt: new Date(db.created_at),
+    metadata: db.metadata as MessageMetadata | undefined,
   };
 }
 
