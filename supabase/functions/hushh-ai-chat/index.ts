@@ -19,8 +19,6 @@ import {
   saveStreamState,
   clearStreamState,
 } from './supabase.ts';
-import { createCalendarEvent, formatEventResponse, CalendarEventResult } from './calendar.ts';
-import { retryWithBackoff } from './retryUtils.ts';
 
 // CORS headers
 const corsHeaders = {
@@ -29,47 +27,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// Helper function to sanitize calendar data for header (prevent truncation)
-function sanitizeCalendarDataForHeader(data: any): string {
-  const MAX_HEADER_SIZE = 7000; // 7KB safety margin
-
-  let json = JSON.stringify(data);
-
-  if (json.length <= MAX_HEADER_SIZE) {
-    return json;
-  }
-
-  console.warn(`Calendar data too large (${json.length} bytes), truncating...`);
-
-  // Truncate attendees list
-  if (data.attendees && data.attendees.length > 20) {
-    data.attendees = data.attendees.slice(0, 20);
-    data.attendeesTruncated = true;
-  }
-
-  // Truncate description
-  if (data.description && data.description.length > 500) {
-    data.description = data.description.slice(0, 500) + '... (truncated)';
-  }
-
-  json = JSON.stringify(data);
-
-  if (json.length > MAX_HEADER_SIZE) {
-    console.error('Even after truncation, data too large. Removing optional fields.');
-    delete data.description;
-    delete data.location;
-    json = JSON.stringify(data);
-  }
-
-  return json;
-}
-
 // GCP Configuration
 const GCP_PROJECT = 'hushone-app';
 const GCP_LOCATION = 'us-central1';
-
-// Calendar API Configuration
-const CALENDAR_API_URL = 'https://hushh-calendar-api-yxfa6ba3aq-uc.a.run.app';
 
 // Available AI Models (white-labeled as Hushh AI variants)
 // All use Gemini 2.0 Flash - differentiated by temperature & tokens
@@ -111,79 +71,19 @@ const AVAILABLE_MODELS = {
 type ModelKey = keyof typeof AVAILABLE_MODELS;
 const DEFAULT_MODEL: ModelKey = 'flash';
 
-// System prompt for Hushh AI with Calendar capabilities
-const SYSTEM_PROMPT = `You are Hushh, a helpful and friendly AI assistant with CALENDAR SCHEDULING capabilities. You are:
+// System prompt for Hushh AI
+const SYSTEM_PROMPT = `You are Hushh, a helpful and friendly AI assistant. You are:
 - Warm, conversational, and empathetic
 - Clear and concise in your explanations
 - Honest about limitations
 - Helpful with a wide range of tasks including writing, analysis, coding, and general questions
-- ABLE TO SCHEDULE MEETINGS AND CALENDAR EVENTS
-
-CALENDAR CAPABILITIES:
-When users ask to schedule meetings, book appointments, or create calendar events, you CAN help them. Here's how:
-1. Parse the meeting details from their request (attendees, date, time, title)
-2. Confirm the details with the user
-3. The system will create the event using the Calendar API
-
-For calendar requests, extract and confirm:
-- Meeting title/description
-- Date and time
-- Attendees (email addresses)
-- Duration (default 30 min if not specified)
-
-Example responses for calendar requests:
-- "I'll schedule a meeting with [email] for [date/time]. The meeting will be about [title]. Should I proceed?"
-- "Got it! I'm creating a calendar event: [title] on [date] at [time] with [attendee]. Is this correct?"
 
 Guidelines:
 - Never mention that you are powered by Gemini, Google, or any specific AI model
 - Always refer to yourself as "Hushh" or "Hushh AI"
 - Be helpful and maintain a positive, supportive tone
 - Format responses with proper markdown when appropriate
-- Keep responses focused and relevant
-- When users want to schedule something, actively help them do it`;
-
-// Keywords to detect calendar-related intents
-const CALENDAR_KEYWORDS = [
-  'schedule', 'meeting', 'appointment', 'calendar', 'book', 'event',
-  'meet with', 'meet', 'call with', 'call', 'tomorrow', 'next week',
-  'pm', 'am', '@', 'remind', 'reminder'
-];
-
-/**
- * Check if message has calendar intent
- */
-function hasCalendarIntent(message: string): boolean {
-  const lowerMessage = message.toLowerCase();
-  return CALENDAR_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
-}
-
-/**
- * Call Calendar API to parse natural language
- */
-async function parseCalendarRequest(text: string): Promise<{ success: boolean; event?: object; error?: string }> {
-  try {
-    const response = await fetch(`${CALENDAR_API_URL}/api/v1/parse`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text }),
-    });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Calendar API parse error:', error);
-      return { success: false, error };
-    }
-    
-    const data = await response.json();
-    return { success: true, event: data };
-  } catch (error) {
-    console.error('Calendar API error:', error);
-    return { success: false, error: String(error) };
-  }
-}
+- Keep responses focused and relevant`;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -319,91 +219,6 @@ serve(async (req: Request) => {
 
     // Track usage
     await trackUsage('chat_request');
-
-    // ============================================
-    // Calendar Scheduling: Check for Calendar Intent
-    // ============================================
-    if (hasCalendarIntent(message)) {
-      // Extract organizer email from userId - MUST be @hushh.ai domain
-      // Service Account with Domain-Wide Delegation can ONLY impersonate @hushh.ai users
-      // Gmail/other domain users cannot be impersonated, so we fallback to default
-      const organizerEmail = userId?.endsWith('@hushh.ai') ? userId : 'ankit@hushh.ai';
-      
-      console.log('Calendar intent detected! Message:', message);
-      console.log('User ID:', userId);
-      console.log('Organizer email (must be @hushh.ai):', organizerEmail);
-
-      // Create the calendar event with exponential backoff retry logic
-      const calendarResult = await retryWithBackoff(
-        () => createCalendarEvent({
-          message,
-          organizerEmail,
-        }),
-        {
-          maxRetries: 3,
-          baseDelay: 1000,
-          maxDelay: 10000,
-        }
-      ).catch(error => ({
-        success: false,
-        error: error.message || 'Failed to create calendar event',
-      } as CalendarEventResult));
-
-      // Format the response
-      const calendarResponse = formatEventResponse(calendarResult);
-
-      // Track calendar event creation
-      if (calendarResult.success) {
-        await trackUsage('calendar_event_created');
-      } else {
-        await trackUsage('calendar_event_failed');
-        console.error('Calendar event creation failed after retry:', calendarResult.error);
-      }
-      
-      // Cache the response
-      if (chatId) {
-        const updatedHistory = [
-          ...conversationHistory,
-          { role: 'user' as const, content: message },
-          { role: 'assistant' as const, content: calendarResponse },
-        ].slice(-20);
-        
-        await cacheContext(chatId, updatedHistory, 3600);
-      }
-      
-      // Return the calendar response with full event metadata
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode(calendarResponse));
-          controller.close();
-        },
-      });
-
-      // Build calendar event metadata for frontend to consume
-      const calendarEventData = calendarResult.success ? {
-        id: calendarResult.eventId,
-        summary: calendarResult.summary,
-        startTime: calendarResult.startTime,
-        endTime: calendarResult.endTime,
-        meetLink: calendarResult.meetLink,
-        htmlLink: calendarResult.htmlLink,
-        attendees: calendarResult.attendees,
-      } : null;
-      
-      return new Response(stream, {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'text/plain; charset=utf-8',
-          'X-Calendar-Event': calendarResult.success ? 'created' : 'failed',
-          'X-Event-Id': calendarResult.eventId || '',
-          'X-Meet-Link': calendarResult.meetLink || '',
-          'X-Calendar-Event-Data': calendarEventData
-            ? sanitizeCalendarDataForHeader(calendarEventData)
-            : '',
-        },
-      });
-    }
 
     // Get access token for Vertex AI
     let accessToken: string | null = null;
