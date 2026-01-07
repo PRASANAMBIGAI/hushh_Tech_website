@@ -3,7 +3,7 @@
  * Main wizard page for building free portfolio websites
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -26,9 +26,26 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { THEME } from '../../core/constants';
 import * as service from '../../services/hushhAIService';
-import type { WizardStep, TemplateId, BasicInfoState } from '../../../types/portfolio';
-import { WIZARD_STEPS, INTERVIEW_QUESTIONS } from '../../../types/portfolio';
+import type { BasicInfoState, WizardStep, TemplateId } from '../../../types/portfolio';
+import { INTERVIEW_QUESTIONS, WIZARD_STEPS } from '../../../types/portfolio';
 import config from '../../../resources/config/config';
+
+// Import enhanced persona-based types and components
+import {
+  type PersonaId,
+  type ExtendedTemplateId,
+  type ExtendedWizardStep,
+  type CustomStyling,
+  EXTENDED_WIZARD_STEPS,
+  EXTENDED_TEMPLATES,
+  PERSONA_QUESTIONS,
+  getQuestionsForPersona,
+  getPersonaById,
+  DEFAULT_STYLING,
+} from '../../../types/portfolioPersonas';
+import { PersonaSelectionStep } from '../../../components/portfolio/PersonaSelectionStep';
+import { ExtendedTemplateSelectionStep } from '../../../components/portfolio/ExtendedTemplateSelectionStep';
+import { CustomStylingStep } from '../../../components/portfolio/CustomStylingStep';
 
 const MotionBox = motion(Box);
 
@@ -341,15 +358,18 @@ interface InterviewStepProps extends StepProps {
   answers: Map<number, string>;
   onAnswerChange: (questionId: number, answer: string) => void;
   isSaving: boolean;
+  selectedPersona: PersonaId | null;
 }
 
-const InterviewStep = ({ onNext, onBack, answers, onAnswerChange, isSaving }: InterviewStepProps) => {
+const InterviewStep = ({ onNext, onBack, answers, onAnswerChange, isSaving, selectedPersona }: InterviewStepProps) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
-  const totalQuestions = INTERVIEW_QUESTIONS.length;
-  const currentQuestion = INTERVIEW_QUESTIONS[currentQuestionIndex];
+  // Get persona-based questions or fallback to default
+  const questions = selectedPersona ? getQuestionsForPersona(selectedPersona) : INTERVIEW_QUESTIONS;
+  const totalQuestions = questions.length;
+  const currentQuestion = questions[currentQuestionIndex];
   const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
 
   // Load saved answer if exists
@@ -570,8 +590,8 @@ const InterviewStep = ({ onNext, onBack, answers, onAnswerChange, isSaving }: In
 // ============================================
 
 interface TemplateSelectionStepProps extends StepProps {
-  selectedTemplate: TemplateId;
-  onSelectTemplate: (templateId: TemplateId) => void;
+  selectedTemplate: ExtendedTemplateId;
+  onSelectTemplate: (templateId: ExtendedTemplateId) => void;
   isSaving: boolean;
 }
 
@@ -1084,7 +1104,7 @@ const PhotoUploadStep = ({
 interface PreviewEditStepProps extends StepProps {
   basicInfo: BasicInfoState;
   interviewAnswers: Map<number, string>;
-  selectedTemplate: TemplateId;
+  selectedTemplate: ExtendedTemplateId;
   photoUrl: string | null;
   enhancedPhotoUrl: string | null;
   generatedContent: {
@@ -1380,7 +1400,7 @@ interface EditableFieldProps {
   onSave: () => void;
   onCancel: () => void;
   templateColors: { primary: string; secondary: string; background: string };
-  selectedTemplate: TemplateId;
+  selectedTemplate: ExtendedTemplateId;
   isSmall?: boolean;
   isMultiline?: boolean;
 }
@@ -1486,7 +1506,7 @@ const EditableField = ({
 
 interface PublishStepProps extends StepProps {
   basicInfo: BasicInfoState;
-  selectedTemplate: TemplateId;
+  selectedTemplate: ExtendedTemplateId;
   photoUrl: string | null;
   enhancedPhotoUrl: string | null;
   generatedContent: {
@@ -1989,12 +2009,15 @@ export default function PortfolioWizardPage() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  // State
+  // State - Now using 8-step ExtendedWizardStep
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
+  const [currentStep, setCurrentStep] = useState<ExtendedWizardStep>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [portfolioId, setPortfolioId] = useState<string | null>(null);
+
+  // NEW: Persona state
+  const [selectedPersona, setSelectedPersona] = useState<PersonaId | null>(null);
 
   // Form state
   const [basicInfo, setBasicInfo] = useState<BasicInfoState>({
@@ -2008,8 +2031,11 @@ export default function PortfolioWizardPage() {
   // Interview state
   const [interviewAnswers, setInterviewAnswers] = useState<Map<number, string>>(new Map());
 
-  // Template state
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>('minimal');
+  // Template state - Now using ExtendedTemplateId
+  const [selectedTemplate, setSelectedTemplate] = useState<ExtendedTemplateId>('minimal');
+
+  // NEW: Custom styling state
+  const [customStyling, setCustomStyling] = useState<CustomStyling>(DEFAULT_STYLING);
 
   // Photo state
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -2248,22 +2274,22 @@ export default function PortfolioWizardPage() {
     }
   };
 
-  // Handlers
+  // Handlers - Updated for 8-step flow
   const handleNext = async () => {
-    // For step 2, save basic info first
-    if (currentStep === 2) {
+    // For step 3 (Basic Info), save basic info first
+    if (currentStep === 3) {
       const saved = await saveBasicInfo();
       if (!saved) return;
     }
     
-    if (currentStep < 7) {
-      setCurrentStep((prev) => (prev + 1) as WizardStep);
+    if (currentStep < 8) {
+      setCurrentStep((prev) => (prev + 1) as ExtendedWizardStep);
     }
   };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep((prev) => (prev - 1) as WizardStep);
+      setCurrentStep((prev) => (prev - 1) as ExtendedWizardStep);
     } else {
       navigate('/hushh-ai');
     }
@@ -2285,9 +2311,9 @@ export default function PortfolioWizardPage() {
     );
   }
 
-  // Get current step info
-  const stepInfo = WIZARD_STEPS.find((s) => s.step === currentStep);
-  const progress = (currentStep / 7) * 100;
+  // Get current step info - Using 8-step extended flow
+  const stepInfo = EXTENDED_WIZARD_STEPS.find((s) => s.step === currentStep);
+  const progress = (currentStep / 8) * 100;
 
   return (
     <Flex h="100vh" bg={THEME.colors.background} direction="column">
@@ -2315,7 +2341,7 @@ export default function PortfolioWizardPage() {
               Hushh Folio
             </Text>
             <Text fontSize={THEME.fontSizes.xs} color={THEME.colors.textSecondary}>
-              {stepInfo?.title} - Step {currentStep} of 7
+              {stepInfo?.title} - Step {currentStep} of 8
             </Text>
           </VStack>
         </HStack>
@@ -2348,14 +2374,16 @@ export default function PortfolioWizardPage() {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.2 }}
             >
+              {/* Step 1: Persona Selection (NEW) */}
               {currentStep === 1 && (
-                <WelcomeStep
+                <PersonaSelectionStep
+                  selectedPersona={selectedPersona}
+                  onSelectPersona={setSelectedPersona}
                   onNext={handleNext}
-                  onBack={handleBack}
-                  isFirst={true}
-                  isLast={false}
                 />
               )}
+              
+              {/* Step 2: Basic Info */}
               {currentStep === 2 && (
                 <BasicInfoStep
                   onNext={handleNext}
@@ -2367,6 +2395,8 @@ export default function PortfolioWizardPage() {
                   isSaving={isSaving}
                 />
               )}
+              
+              {/* Step 3: Interview with Persona-Based Questions */}
               {currentStep === 3 && (
                 <InterviewStep
                   onNext={handleNext}
@@ -2376,20 +2406,34 @@ export default function PortfolioWizardPage() {
                   answers={interviewAnswers}
                   onAnswerChange={handleInterviewAnswerChange}
                   isSaving={isSaving}
+                  selectedPersona={selectedPersona}
                 />
               )}
+              
+              {/* Step 4: Extended Template Selection (NEW - 12 templates) */}
               {currentStep === 4 && (
-                <TemplateSelectionStep
+                <ExtendedTemplateSelectionStep
+                  selectedTemplate={selectedTemplate}
+                  selectedPersona={selectedPersona}
+                  onSelectTemplate={setSelectedTemplate}
                   onNext={handleNext}
                   onBack={handleBack}
-                  isFirst={false}
-                  isLast={false}
-                  selectedTemplate={selectedTemplate}
-                  onSelectTemplate={setSelectedTemplate}
-                  isSaving={isSaving}
                 />
               )}
+              
+              {/* Step 5: Custom Styling (NEW) */}
               {currentStep === 5 && (
+                <CustomStylingStep
+                  styling={customStyling}
+                  selectedTemplate={selectedTemplate}
+                  onUpdateStyling={(updates) => setCustomStyling(prev => ({ ...prev, ...updates }))}
+                  onNext={handleNext}
+                  onBack={handleBack}
+                />
+              )}
+              
+              {/* Step 6: Photo Upload */}
+              {currentStep === 6 && (
                 <PhotoUploadStep
                   onNext={handleNext}
                   onBack={handleBack}
@@ -2403,7 +2447,9 @@ export default function PortfolioWizardPage() {
                   isSaving={isSaving}
                 />
               )}
-              {currentStep === 6 && (
+              
+              {/* Step 7: Preview & Edit */}
+              {currentStep === 7 && (
                 <PreviewEditStep
                   onNext={handleNext}
                   onBack={handleBack}
@@ -2421,7 +2467,9 @@ export default function PortfolioWizardPage() {
                   isSaving={isSaving}
                 />
               )}
-              {currentStep === 7 && (
+              
+              {/* Step 8: Publish */}
+              {currentStep === 8 && (
                 <PublishStep
                   onNext={handleNext}
                   onBack={handleBack}
@@ -2465,7 +2513,7 @@ export default function PortfolioWizardPage() {
         </Box>
       </Flex>
 
-      {/* Step Indicators */}
+      {/* Step Indicators - Using 8-step extended flow */}
       <HStack
         p={4}
         borderTop={`1px solid ${THEME.colors.border}`}
@@ -2473,7 +2521,7 @@ export default function PortfolioWizardPage() {
         justify="center"
         spacing={2}
       >
-        {WIZARD_STEPS.map((step) => (
+        {EXTENDED_WIZARD_STEPS.map((step) => (
           <Box
             key={step.step}
             w={step.step === currentStep ? '24px' : '8px'}
