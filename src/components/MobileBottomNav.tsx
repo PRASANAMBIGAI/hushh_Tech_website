@@ -55,6 +55,7 @@ const hiddenOnPages = [
   '/kyc-flow',
   '/kyc-demo',
   '/a2a-playground',
+  '/hushh-user-profile', // Hide nav on profile page for better UX (like onboarding)
 ];
 
 const MobileBottomNav: React.FC = () => {
