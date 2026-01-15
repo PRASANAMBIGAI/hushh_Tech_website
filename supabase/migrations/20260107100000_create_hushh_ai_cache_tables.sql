@@ -42,9 +42,16 @@ CREATE TABLE IF NOT EXISTS hushh_ai_media_limits (
     UNIQUE(user_id, upload_date)
 );
 
--- Index for fast lookups
-CREATE INDEX IF NOT EXISTS idx_media_limits_user_date 
-ON hushh_ai_media_limits(user_id, upload_date);
+-- Index for fast lookups (conditionally check if column exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns 
+               WHERE table_name = 'hushh_ai_media_limits' 
+               AND column_name = 'upload_date') THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_media_limits_user_date 
+                 ON hushh_ai_media_limits(user_id, upload_date)';
+    END IF;
+END $$;
 
 -- ============================================
 -- 3. Response Cache Table
