@@ -290,17 +290,28 @@ After a few exchanges, ask if they're ready to upload their resume for analysis.
       // Log selected language for debugging
       console.log('[Vision] Starting session with language:', selectedLanguage.name, selectedLanguage.voiceCode);
 
+      // Build speech config - only use English voice for English, let model auto-select for other languages
+      const isEnglish = selectedLanguage.code === 'en';
+      const speechConfig = isEnglish 
+        ? {
+            voiceConfig: { 
+              prebuiltVoiceConfig: { voiceName: coach.voiceName } 
+            },
+            languageCode: selectedLanguage.voiceCode,
+          }
+        : {
+            // For non-English: Don't specify a voice name, let Gemini auto-select appropriate voice
+            // The languageCode will guide the model to use the correct language
+            languageCode: selectedLanguage.voiceCode,
+          };
+      
+      console.log('[Vision] Speech config:', JSON.stringify(speechConfig));
+
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          speechConfig: { 
-            voiceConfig: { 
-              prebuiltVoiceConfig: { voiceName: coach.voiceName } 
-            },
-            // Set the language code for speech output
-            languageCode: selectedLanguage.voiceCode,
-          },
+          speechConfig,
           systemInstruction: visionSystemInstruction,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
