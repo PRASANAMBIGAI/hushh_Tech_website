@@ -109,6 +109,7 @@ const ResumeNodeVisionSession: React.FC<ResumeNodeVisionSessionProps> = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [resumeCache, setResumeCache] = useState<CachedContent | null>(null);
   const [welcomeStep, setWelcomeStep] = useState(0);
+  const [uploadComplete, setUploadComplete] = useState(false);
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -352,6 +353,7 @@ This is Phase 0 - Neural Calibration before resume analysis.`
     
     setIsUploadingResume(true);
     setUploadProgress(0);
+    setUploadComplete(false);
     
     try {
       const result = await uploadAndCacheResume(
@@ -361,7 +363,7 @@ This is Phase 0 - Neural Calibration before resume analysis.`
       );
       
       setResumeCache(result.cache);
-      setShowResumeUpload(false);
+      setUploadComplete(true); // Trigger success state in dialog
       
       // Notify Gemini about the uploaded resume
       if (sessionRef.current) {
@@ -379,10 +381,18 @@ Be specific - mention that you can see their resume and are ready to analyze it.
       console.log('[Vision] Resume cached:', result.cache.name);
     } catch (error) {
       console.error('[Vision] Resume upload failed:', error);
+      setUploadComplete(false);
     } finally {
       setIsUploadingResume(false);
     }
   }, [selectedCoach]);
+
+  // Handle upload complete - called after success animation
+  const handleUploadComplete = useCallback(() => {
+    setShowResumeUpload(false);
+    setUploadComplete(false);
+    setUploadProgress(0);
+  }, []);
 
   // Handle skip resume upload
   const handleSkipUpload = useCallback(() => {
@@ -811,8 +821,10 @@ Ask them about their current role and career goals instead.`
           coach={selectedCoach}
           onUpload={handleResumeUpload}
           onSkip={handleSkipUpload}
+          onComplete={handleUploadComplete}
           isUploading={isUploadingResume}
           uploadProgress={uploadProgress}
+          isComplete={uploadComplete}
         />
       )}
     </div>
