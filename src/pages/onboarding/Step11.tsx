@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import config from '../../resources/config/config';
 import { useFooterVisibility } from '../../utils/useFooterVisibility';
+
+// DOB Inference API URL
+const DOB_INFERENCE_API = `${config.SUPABASE_URL}/functions/v1/hushh-dob-inference`;
 
 // Back arrow icon (same as Step3)
 const BackIcon = () => (
@@ -52,6 +55,12 @@ function OnboardingStep11() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  
+  // DOB Inference state
+  const [isInferringDob, setIsInferringDob] = useState(false);
+  const [inferenceMessage, setInferenceMessage] = useState<string | null>(null);
+  const [dobConfidence, setDobConfidence] = useState<number>(0);
+  const dobAbortController = useRef<AbortController | null>(null);
 
   const formatIsoToDisplay = (iso?: string | null) => {
     if (!iso) return '';
@@ -101,18 +110,103 @@ function OnboardingStep11() {
       const { data: { user } } = await config.supabaseClient.auth.getUser();
       if (!user) return;
 
+      // Fetch existing data including name and address for DOB inference
       const { data } = await config.supabaseClient
         .from('onboarding_data')
-        .select('ssn_encrypted, date_of_birth')
+        .select('ssn_encrypted, date_of_birth, legal_first_name, legal_last_name, residence_country, city, state, address_country, phone_number, phone_country_code')
         .eq('user_id', user.id)
         .single();
 
-      if (data) {
+      // If DOB already exists, use it (user-entered takes priority)
+      if (data?.date_of_birth) {
         setDob(formatIsoToDisplay(data.date_of_birth) || '');
+        return; // Don't infer if already set
+      }
+
+      // If we have name, try to infer DOB in real-time using Gemini + Google Search
+      if (data?.legal_first_name && data?.legal_last_name) {
+        const fullName = `${data.legal_first_name} ${data.legal_last_name}`;
+        console.log('[Step11] Starting real-time DOB inference for:', fullName);
+        
+        setIsInferringDob(true);
+        setInferenceMessage('🔍 Searching for your date of birth...');
+        
+        dobAbortController.current = new AbortController();
+        
+        try {
+          const response = await fetch(DOB_INFERENCE_API, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': config.SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${config.SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              name: fullName,
+              email: user.email || '',
+              address: {
+                city: data.city || '',
+                state: data.state || '',
+                country: data.address_country || data.residence_country || '',
+              },
+              residenceCountry: data.residence_country || '',
+              phone: data.phone_country_code && data.phone_number 
+                ? `${data.phone_country_code}${data.phone_number}` 
+                : '',
+            }),
+            signal: dobAbortController.current.signal,
+          });
+
+          const result = await response.json();
+
+          if (result.success && result.data?.dobDisplay) {
+            console.log('[Step11] DOB inference success:', result.data);
+            
+            setDob(result.data.dobDisplay);
+            setDobConfidence(result.data.confidence || 0);
+            
+            // Show success message with confidence
+            const confidenceText = result.data.confidence >= 70 ? '✅' : result.data.confidence >= 40 ? '🔶' : '🔍';
+            setInferenceMessage(`${confidenceText} Found: ${result.data.dobDisplay} (${result.data.confidence}% confidence)`);
+            
+            // Cache the inferred DOB in parallel (async)
+            config.supabaseClient
+              .from('onboarding_data')
+              .update({
+                ai_inferred_dob: result.data.dob,
+                ai_dob_confidence: result.data.confidence,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('user_id', user.id)
+              .then(() => console.log('[Step11] DOB cached to DB'));
+            
+            // Clear message after 3 seconds
+            setTimeout(() => setInferenceMessage(null), 3000);
+          } else {
+            console.log('[Step11] DOB inference returned no data');
+            setInferenceMessage(null);
+          }
+        } catch (err) {
+          if ((err as Error).name === 'AbortError') {
+            console.log('[Step11] DOB inference aborted');
+          } else {
+            console.error('[Step11] DOB inference error:', err);
+          }
+          setInferenceMessage(null);
+        } finally {
+          setIsInferringDob(false);
+        }
       }
     };
 
     loadData();
+    
+    // Cleanup: abort pending request on unmount
+    return () => {
+      if (dobAbortController.current) {
+        dobAbortController.current.abort();
+      }
+    };
   }, []);
 
   const formatSSN = (value: string) => {
@@ -343,6 +437,31 @@ function OnboardingStep11() {
                 </span>
               </div>
             </label>
+            
+            {/* DOB Inference Status */}
+            {(isInferringDob || inferenceMessage) && (
+              <div className={`mt-3 py-2 px-3 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${
+                isInferringDob 
+                  ? 'bg-blue-50 text-blue-600' 
+                  : dobConfidence >= 70
+                    ? 'bg-green-50 text-green-600'
+                    : dobConfidence >= 40
+                      ? 'bg-amber-50 text-amber-600'
+                      : 'bg-slate-50 text-slate-600'
+              }`}>
+                {isInferringDob ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>{inferenceMessage || 'Searching...'}</span>
+                  </>
+                ) : (
+                  <span>{inferenceMessage}</span>
+                )}
+              </div>
+            )}
           </div>
         </main>
 
