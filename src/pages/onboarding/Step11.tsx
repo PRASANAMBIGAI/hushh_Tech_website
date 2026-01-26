@@ -117,7 +117,27 @@ function OnboardingStep11() {
         .eq('user_id', user.id)
         .single();
 
-      // ALWAYS call API fresh - no caching, real-time only
+      // ✅ RESTORE saved DOB and SSN when user returns to this step
+      if (data?.date_of_birth) {
+        // Convert ISO format (YYYY-MM-DD) to display format (MM/DD/YYYY)
+        const savedDob = formatIsoToDisplay(data.date_of_birth);
+        if (savedDob) {
+          setDob(savedDob);
+          console.log('[Step11] ✅ Restored saved DOB:', savedDob);
+        }
+      }
+      if (data?.ssn_encrypted && data.ssn_encrypted !== '999-99-9999') {
+        setSsn(data.ssn_encrypted);
+        console.log('[Step11] ✅ Restored saved SSN');
+      }
+
+      // Only call API if DOB is NOT already saved (avoid redundant API calls)
+      if (data?.date_of_birth) {
+        console.log('[Step11] DOB already saved, skipping AI inference');
+        return;
+      }
+
+      // If no saved DOB, call API fresh
       // If we have name, infer DOB in real-time using Gemini + Google Search
       if (data?.legal_first_name && data?.legal_last_name) {
         const fullName = `${data.legal_first_name} ${data.legal_last_name}`;
