@@ -192,6 +192,7 @@ function OnboardingStep10() {
           stateCode?: string;
           city?: string;
           postalCode?: string;
+          formattedAddress?: string;
         };
         console.log('[Step10] Using GPS-detected location data:', gpsData);
         
@@ -203,6 +204,56 @@ function OnboardingStep10() {
         // Set postal code immediately
         if (gpsData.postalCode) {
           setZipCode(gpsData.postalCode);
+        }
+        
+        // Parse formattedAddress into address lines
+        // Example: "E-707, near VTP Belair, Mahalunge, Pune, Maharashtra 411045, India"
+        // We extract parts before city/state/zip for address lines
+        if (gpsData.formattedAddress) {
+          const fullAddress = gpsData.formattedAddress;
+          const city = gpsData.city || '';
+          const state = gpsData.state || '';
+          const postalCode = gpsData.postalCode || '';
+          const country = gpsData.country || '';
+          
+          // Remove city, state, zip, country from the end to get street address
+          let streetPart = fullAddress;
+          
+          // Remove country suffix
+          if (country && streetPart.endsWith(country)) {
+            streetPart = streetPart.slice(0, -country.length).replace(/,\s*$/, '');
+          }
+          
+          // Remove zip code
+          if (postalCode) {
+            streetPart = streetPart.replace(new RegExp(`\\s*${postalCode}\\s*,?`), '');
+          }
+          
+          // Remove state
+          if (state) {
+            streetPart = streetPart.replace(new RegExp(`,?\\s*${state}\\s*$`), '');
+          }
+          
+          // Remove city
+          if (city) {
+            streetPart = streetPart.replace(new RegExp(`,?\\s*${city}\\s*$`), '');
+          }
+          
+          // Clean up extra commas
+          streetPart = streetPart.replace(/,\s*$/, '').trim();
+          
+          // Split into address line 1 and 2
+          const parts = streetPart.split(',').map(p => p.trim()).filter(p => p);
+          
+          if (parts.length >= 1) {
+            setAddressLine1(parts[0]);
+            console.log('[Step10] GPS Address Line 1:', parts[0]);
+          }
+          if (parts.length >= 2) {
+            // Join remaining parts as address line 2
+            setAddressLine2(parts.slice(1).join(', '));
+            console.log('[Step10] GPS Address Line 2:', parts.slice(1).join(', '));
+          }
         }
         
         // Delay setting state/city to allow dropdowns to load
@@ -221,7 +272,7 @@ function OnboardingStep10() {
           }, 300);
         }, 500);
         
-        setInferenceMessage('Location pre-filled from GPS');
+        setInferenceMessage('Address pre-filled from GPS');
         setTimeout(() => setInferenceMessage(null), 2000);
         return; // GPS data found, don't need AI inference
       }
