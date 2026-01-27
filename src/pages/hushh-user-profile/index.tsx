@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast, useClipboard } from "@chakra-ui/react";
 import { useFooterVisibility } from "../../utils/useFooterVisibility";
-import { ArrowLeft, User, TrendingUp, Shield, ChevronDown, Calendar, Brain, Target, Clock, Gauge, Droplets, Briefcase, Layers, Zap, Activity, ChevronUp, Edit2, Share2, Link, Copy, Check, ExternalLink, Home } from "lucide-react";
+import { ArrowLeft, User, TrendingUp, Shield, ChevronDown, Calendar, Brain, Target, Clock, Gauge, Droplets, Briefcase, Layers, Zap, Activity, ChevronUp, Edit2, Share2, Link, Copy, Check, ExternalLink, Home, Search, Globe, Coffee, Heart, Users, Newspaper } from "lucide-react";
 import { FaApple, FaWhatsapp, FaLinkedin } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
 import { SiGooglepay } from "react-icons/si";
@@ -12,6 +12,7 @@ import { generateInvestorProfile } from "../../services/investorProfile/apiClien
 import { downloadHushhGoldPass, launchGoogleWalletPass } from "../../services/walletPass";
 import { InvestorProfile, FIELD_LABELS, VALUE_LABELS } from "../../types/investorProfile";
 import AIDetectedPreferences from "../../components/profile/AIDetectedPreferences";
+import { invokeShadowInvestigator, formatPhoneContact, ShadowProfile, SHADOW_FIELD_LABELS } from "../../services/shadowInvestigator";
 
 // Complete country list matching Step 6 onboarding - using full country names
 const COUNTRIES = [
@@ -103,6 +104,9 @@ const HushhUserProfilePage: React.FC = () => {
   const [isApplePassLoading, setIsApplePassLoading] = useState(false);
   const [isGooglePassLoading, setIsGooglePassLoading] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
+  // Shadow Investigator state
+  const [shadowProfile, setShadowProfile] = useState<ShadowProfile | null>(null);
+  const [shadowLoading, setShadowLoading] = useState(false);
 
   // Field options for AI-generated profile editing
   const FIELD_OPTIONS: Record<string, { value: string; label: string }[]> = {
@@ -399,56 +403,111 @@ const HushhUserProfilePage: React.FC = () => {
     }
 
     setLoading(true);
+    setShadowLoading(true);
 
     try {
-      const result = await generateInvestorProfile({
-        name: form.name,
-        email: form.email,
-        age: typeof form.age === "number" ? form.age : Number(form.age),
-        phone_country_code: form.phoneCountryCode,
-        phone_number: form.phoneNumber,
-        organisation: form.organisation || undefined,
-      });
+      // Call BOTH APIs in parallel using Promise.allSettled
+      const [investorResult, shadowResult] = await Promise.allSettled([
+        // 1. Existing Investor Profile API
+        generateInvestorProfile({
+          name: form.name,
+          email: form.email,
+          age: typeof form.age === "number" ? form.age : Number(form.age),
+          phone_country_code: form.phoneCountryCode,
+          phone_number: form.phoneNumber,
+          organisation: form.organisation || undefined,
+        }),
+        // 2. NEW Shadow Investigator API (parallel)
+        // Calculate age from DOB for higher confidence score
+        invokeShadowInvestigator({
+          name: form.name,
+          email: form.email,
+          contact: formatPhoneContact(form.phoneCountryCode, form.phoneNumber),
+          country: form.residenceCountry || form.citizenshipCountry || undefined,
+          age: typeof form.age === 'number' ? form.age : (form.dateOfBirth 
+            ? Math.floor((Date.now() - new Date(form.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+            : undefined),
+          dateOfBirth: form.dateOfBirth || undefined,
+        }),
+      ]);
 
-      if (!result.success || !result.profile) {
-        throw new Error(result.error || "Failed to generate investor profile");
-      }
+      // Handle Investor Profile result
+      if (investorResult.status === 'fulfilled' && investorResult.value.success && investorResult.value.profile) {
+        setInvestorProfile(investorResult.value.profile);
 
-      setInvestorProfile(result.profile);
+        if (userId) {
+          const supabase = resources.config.supabaseClient;
+          if (supabase) {
+            const { data: upsertData } = await supabase
+              .from("investor_profiles")
+              .upsert({
+                user_id: userId,
+                name: form.name,
+                email: form.email,
+                age: typeof form.age === "number" ? form.age : Number(form.age),
+                phone_country_code: form.phoneCountryCode,
+                phone_number: form.phoneNumber,
+                organisation: form.organisation || null,
+                investor_profile: investorResult.value.profile,
+                user_confirmed: true,
+                confirmed_at: new Date().toISOString(),
+              })
+              .select("slug")
+              .single();
 
-      if (userId) {
-        const supabase = resources.config.supabaseClient;
-        if (supabase) {
-          const { data: upsertData } = await supabase
-            .from("investor_profiles")
-            .upsert({
-              user_id: userId,
-              name: form.name,
-              email: form.email,
-              age: typeof form.age === "number" ? form.age : Number(form.age),
-              phone_country_code: form.phoneCountryCode,
-              phone_number: form.phoneNumber,
-              organisation: form.organisation || null,
-              investor_profile: result.profile,
-              user_confirmed: true,
-              confirmed_at: new Date().toISOString(),
-            })
-            .select("slug")
-            .single();
-
-          // Set profile slug if returned
-          if (upsertData?.slug) {
-            setProfileSlug(upsertData.slug);
+            // Set profile slug if returned
+            if (upsertData?.slug) {
+              setProfileSlug(upsertData.slug);
+            }
           }
         }
+      } else {
+        const error = investorResult.status === 'rejected' 
+          ? investorResult.reason 
+          : investorResult.value.error;
+        console.error('[Profile] Investor profile error:', error);
       }
 
-      toast({
-        title: "Success",
-        description: "Investor profile generated successfully",
-        status: "success",
-        duration: 4000,
-      });
+      // Handle Shadow Investigator result
+      if (shadowResult.status === 'fulfilled' && shadowResult.value.success && shadowResult.value.data) {
+        setShadowProfile(shadowResult.value.data.structured);
+        console.log('[Profile] Shadow profile loaded:', shadowResult.value.data.structured.confidence);
+      } else {
+        const error = shadowResult.status === 'rejected' 
+          ? shadowResult.reason 
+          : shadowResult.value.error;
+        console.error('[Profile] Shadow investigator error:', error);
+      }
+
+      // REQUIRE BOTH APIs to succeed before showing profiles
+      const investorSuccess = investorResult.status === 'fulfilled' && investorResult.value.success;
+      const shadowSuccess = shadowResult.status === 'fulfilled' && shadowResult.value.success;
+
+      if (investorSuccess && shadowSuccess) {
+        // Both succeeded - show success and enable profile display
+        toast({
+          title: "Profile Complete",
+          description: "Both AI profiles generated successfully",
+          status: "success",
+          duration: 4000,
+        });
+      } else if (!investorSuccess && !shadowSuccess) {
+        // Both failed
+        setInvestorProfile(null);
+        setShadowProfile(null);
+        throw new Error("Failed to generate profiles. Please try again.");
+      } else {
+        // Only one succeeded - clear partial results and show warning
+        setInvestorProfile(null);
+        setShadowProfile(null);
+        const failedApi = !investorSuccess ? "Investor Profile" : "Shadow Investigator";
+        toast({
+          title: "Partial Failure",
+          description: `${failedApi} API failed. Please try again for complete results.`,
+          status: "warning",
+          duration: 5000,
+        });
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -458,6 +517,7 @@ const HushhUserProfilePage: React.FC = () => {
       });
     } finally {
       setLoading(false);
+      setShadowLoading(false);
     }
   };
 
@@ -1217,6 +1277,257 @@ const HushhUserProfilePage: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            </section>
+          )}
+
+          {/* Shadow Investigator Deep Profile Section */}
+          {shadowProfile && (
+            <section className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <Search className="w-6 h-6 text-purple-400" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Deep Profile Intelligence</h3>
+                    <p className="text-xs text-slate-400">Powered by Shadow Investigator AI</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span 
+                    className="text-xs font-medium px-3 py-1 rounded-full bg-purple-500/20 text-purple-300"
+                  >
+                    {Math.round((shadowProfile.confidence || 0) * 100)}% Confidence
+                  </span>
+                </div>
+              </div>
+
+              {/* Identity Section */}
+              <div className="mb-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <User className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-medium text-blue-300">Identity & Demographics</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {shadowProfile.age && (
+                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                      <span className="text-xs text-slate-400">Age</span>
+                      <p className="text-sm text-white font-medium">{shadowProfile.age}</p>
+                      {shadowProfile.ageContext && (
+                        <p className="text-xs text-slate-500 mt-1">{shadowProfile.ageContext}</p>
+                      )}
+                    </div>
+                  )}
+                  {shadowProfile.occupation && (
+                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                      <span className="text-xs text-slate-400">Occupation</span>
+                      <p className="text-sm text-white font-medium">{shadowProfile.occupation}</p>
+                    </div>
+                  )}
+                  {shadowProfile.nationality && (
+                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                      <span className="text-xs text-slate-400">Nationality</span>
+                      <p className="text-sm text-white font-medium">{shadowProfile.nationality}</p>
+                    </div>
+                  )}
+                  {shadowProfile.maritalStatus && (
+                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                      <span className="text-xs text-slate-400">Marital Status</span>
+                      <p className="text-sm text-white font-medium">{shadowProfile.maritalStatus}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Net Worth Section */}
+              {shadowProfile.netWorthScore > 0 && (
+                <div className="mb-5 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 rounded-xl p-4 border border-amber-500/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-4 h-4 text-amber-400" />
+                    <span className="text-sm font-medium text-amber-300">Wealth Analysis</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-amber-400 to-yellow-400 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(shadowProfile.netWorthScore, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-lg font-bold text-amber-400">{shadowProfile.netWorthScore}/100</span>
+                  </div>
+                  {shadowProfile.netWorthContext && (
+                    <p className="text-xs text-amber-200/70 mt-2">{shadowProfile.netWorthContext}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Lifestyle Preferences */}
+              <div className="mb-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Heart className="w-4 h-4 text-pink-400" />
+                  <span className="text-sm font-medium text-pink-300">Lifestyle & Preferences</span>
+                </div>
+                <div className="space-y-2">
+                  {shadowProfile.diet && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-slate-400">Diet:</span>
+                      <span className="text-white">{shadowProfile.diet}</span>
+                    </div>
+                  )}
+                  {shadowProfile.hobbies && shadowProfile.hobbies.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {shadowProfile.hobbies.map((hobby, idx) => (
+                        <span key={idx} className="text-xs px-2 py-1 bg-pink-500/20 text-pink-300 rounded-full">
+                          {hobby}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {shadowProfile.brands && shadowProfile.brands.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {shadowProfile.brands.map((brand, idx) => (
+                        <span key={idx} className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full">
+                          {brand}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Coffee & Beverage Preferences */}
+              {(shadowProfile.coffeePreferences?.length > 0 || shadowProfile.drinkPreferences?.length > 0) && (
+                <div className="mb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Coffee className="w-4 h-4 text-orange-400" />
+                    <span className="text-sm font-medium text-orange-300">Beverage Preferences</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {shadowProfile.coffeePreferences?.map((pref, idx) => (
+                      <span key={`coffee-${idx}`} className="text-xs px-2 py-1 bg-orange-500/20 text-orange-300 rounded-full">
+                        ☕ {pref}
+                      </span>
+                    ))}
+                    {shadowProfile.drinkPreferences?.map((pref, idx) => (
+                      <span key={`drink-${idx}`} className="text-xs px-2 py-1 bg-cyan-500/20 text-cyan-300 rounded-full">
+                        🍸 {pref}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Known For */}
+              {shadowProfile.knownFor && shadowProfile.knownFor.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Zap className="w-4 h-4 text-yellow-400" />
+                    <span className="text-sm font-medium text-yellow-300">Known For</span>
+                  </div>
+                  <div className="space-y-2">
+                    {shadowProfile.knownFor.map((item, idx) => (
+                      <div key={idx} className="bg-yellow-500/10 rounded-lg p-2 border border-yellow-500/20">
+                        <p className="text-sm text-yellow-100">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Associates / Network */}
+              {shadowProfile.associates && shadowProfile.associates.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users className="w-4 h-4 text-green-400" />
+                    <span className="text-sm font-medium text-green-300">Key Network</span>
+                  </div>
+                  <div className="space-y-2">
+                    {shadowProfile.associates.slice(0, 5).map((associate, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-2 border border-slate-700">
+                        <div>
+                          <p className="text-sm text-white font-medium">{associate.name}</p>
+                          <p className="text-xs text-slate-400">{associate.relation}</p>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          associate.category === 'INNER' ? 'bg-green-500/20 text-green-300' :
+                          associate.category === 'ORBIT' ? 'bg-blue-500/20 text-blue-300' :
+                          associate.category === 'MEDIA' ? 'bg-purple-500/20 text-purple-300' :
+                          'bg-red-500/20 text-red-300'
+                        }`}>
+                          {associate.category}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent News */}
+              {shadowProfile.news && shadowProfile.news.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Newspaper className="w-4 h-4 text-indigo-400" />
+                    <span className="text-sm font-medium text-indigo-300">Recent News & Media</span>
+                  </div>
+                  <div className="space-y-2">
+                    {shadowProfile.news.slice(0, 3).map((news, idx) => (
+                      <div key={idx} className="bg-indigo-500/10 rounded-lg p-3 border border-indigo-500/20">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-indigo-300">{news.source}</span>
+                          <span className="text-xs text-slate-500">{news.date}</span>
+                        </div>
+                        <p className="text-sm text-white font-medium">{news.title}</p>
+                        {news.summary && (
+                          <p className="text-xs text-slate-400 mt-1">{news.summary}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Social Media Links */}
+              {shadowProfile.socialMedia && shadowProfile.socialMedia.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-slate-700">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Globe className="w-4 h-4 text-cyan-400" />
+                    <span className="text-sm font-medium text-cyan-300">Social Profiles</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {shadowProfile.socialMedia.map((social, idx) => (
+                      <a
+                        key={idx}
+                        href={social.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs px-3 py-1.5 bg-cyan-500/20 text-cyan-300 rounded-full hover:bg-cyan-500/30 transition-colors"
+                      >
+                        {social.platform}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Shadow Profile Loading State */}
+          {shadowLoading && !shadowProfile && (
+            <section className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="animate-spin">
+                  <Search className="w-6 h-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Deep Profile Search</h3>
+                  <p className="text-xs text-slate-400">Analyzing public data sources...</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="h-4 bg-slate-700/50 rounded animate-pulse" />
+                <div className="h-4 bg-slate-700/50 rounded animate-pulse w-3/4" />
+                <div className="h-4 bg-slate-700/50 rounded animate-pulse w-1/2" />
               </div>
             </section>
           )}
