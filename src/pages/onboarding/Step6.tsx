@@ -101,7 +101,7 @@ export default function OnboardingStep6() {
         .single();
 
       if (onboardingData) {
-        // If user already has data, use it
+        // If user already has data, use it (but still detect fresh GPS)
         if (onboardingData.citizenship_country) {
           setCitizenshipCountry(onboardingData.citizenship_country);
           setUserManuallyChanged(true); // User already has data, allow continue
@@ -110,15 +110,11 @@ export default function OnboardingStep6() {
           setResidenceCountry(onboardingData.residence_country);
         }
         
-        // If GPS data already cached, mark as detected
-        if (onboardingData.gps_location_data) {
-          setLocationDetected(true);
-          setDetectionAttempted(true);
-          return;
-        }
+        // NOTE: We no longer skip GPS detection even if cached.
+        // Always detect fresh GPS location in real-time every time user visits Step 6
       }
 
-      // Start GPS detection for new users
+      // ALWAYS detect GPS location in real-time (every page visit)
       detectLocation(user.id);
     };
 

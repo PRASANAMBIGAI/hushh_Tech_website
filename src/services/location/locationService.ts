@@ -65,7 +65,7 @@ export class LocationService {
         {
           enableHighAccuracy: true,
           timeout: 10000,
-          maximumAge: 300000, // 5 minutes cache
+          maximumAge: 0, // Always get fresh real-time GPS data (no caching)
           ...options,
         }
       );
