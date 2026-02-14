@@ -358,9 +358,7 @@ export const saveFinancialDataToSupabase = async (
     // Upsert — update if user already has a record, insert otherwise
     const { error } = await supabase
       .from('user_financial_data')
-      .upsert(row, { onConflict: 'user_id' })
-      .select()
-      .single();
+      .upsert(row, { onConflict: 'user_id' });
 
     if (error) {
       // If upsert with onConflict fails (no unique constraint), try insert
