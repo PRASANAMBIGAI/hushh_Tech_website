@@ -58,6 +58,18 @@ export default function OnboardingStep1() {
       }
       setUserId(user.id);
 
+      // Gate: redirect to financial-link if not yet verified
+      const { data: financialData } = await config.supabaseClient
+        .from('user_financial_data')
+        .select('status')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!financialData || (financialData.status !== 'complete' && financialData.status !== 'partial')) {
+        navigate('/onboarding/financial-link', { replace: true });
+        return;
+      }
+
       // Check if user already has onboarding data
       const { data: onboardingData } = await config.supabaseClient
         .from('onboarding_data')
