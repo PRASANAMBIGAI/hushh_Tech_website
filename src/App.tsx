@@ -117,10 +117,11 @@ const useLayoutVisibility = () => {
   const isHushhAgent = location.pathname.startsWith('/hushh-agent');
   const isKai = location.pathname.startsWith('/kai');
   const isStudio = location.pathname.startsWith('/studio');
-  
+  const isOnboarding = location.pathname.startsWith('/onboarding');
+
   return {
     showNavbar: !isHushhAI && !isHushhAgent && !isKai && !isStudio,
-    showFooter: !isHushhAI && !isHushhAgent && !isKai && !isStudio,
+    showFooter: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isOnboarding,
     showMobileNav: !isHushhAI && !isHushhAgent && !isKai && !isStudio,
   };
 };

@@ -10,6 +10,13 @@ export function useFooterVisibility(): boolean {
   const [isFooterVisible, setIsFooterVisible] = useState(false);
 
   useEffect(() => {
+    // On onboarding pages, footer is hidden by App.tsx, so always show fixed footer
+    const isOnboarding = typeof window !== 'undefined' && window.location.pathname.startsWith('/onboarding');
+    if (isOnboarding) {
+      setIsFooterVisible(false);
+      return;
+    }
+
     // Find the main footer element (it has id="main-footer" or class containing "footer")
     const findFooter = (): Element | null => {
       // Try to find footer by ID first
