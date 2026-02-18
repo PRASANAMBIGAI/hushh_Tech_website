@@ -460,7 +460,7 @@ export default function OnboardingStep4() {
                           onClick={handleShowPermissionHelp}
                           className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
                         >
-                          How to Enable Location â†’
+                          How to Enable Location \u2192
                         </button>
                       </div>
                     )}
