@@ -1,11 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Select, {
-  components,
-  type OptionProps,
-  type SingleValueProps,
-  type StylesConfig,
-} from 'react-select';
 import ReactCountryFlag from 'react-country-flag';
 import config from '../../resources/config/config';
 import { upsertOnboardingData } from '../../services/onboarding/upsertOnboardingData';
@@ -13,14 +7,14 @@ import type { UIAccountType } from '../../types/onboarding';
 import { ACCOUNT_TYPE_OPTIONS } from '../../types/onboarding';
 import { useFooterVisibility } from '../../utils/useFooterVisibility';
 import { locationService } from '../../services/location';
-import { OnboardingStepProgress } from '../../components/onboarding/OnboardingStepProgress';
 
-// Back arrow icon
-const BackIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-);
+/* ═══════════════════════════════════════════════
+   CONSTANTS
+   ═══════════════════════════════════════════════ */
+
+const CURRENT_STEP = 5;
+const TOTAL_STEPS = 12;
+const PROGRESS_PCT = Math.round((CURRENT_STEP / TOTAL_STEPS) * 100);
 
 interface DialCodeOption {
   code: string;
@@ -59,102 +53,14 @@ const PHONE_DIAL_CODES: DialCodeOption[] = [
   { code: '+90', country: 'Turkey', iso: 'TR' },
 ];
 
-const DialCodeOptionRow = ({ option }: { option: DialCodeOption }) => (
-  <div className="flex min-w-0 items-center gap-2.5">
-    <ReactCountryFlag
-      countryCode={option.iso}
-      svg
-      style={{ width: '1.15em', height: '1.15em', borderRadius: 2, flexShrink: 0 }}
-      aria-label={option.country}
-      title={option.country}
-    />
-    <span className="truncate text-sm font-medium text-slate-900">{option.country}</span>
-    <span className="ml-auto text-sm font-semibold text-slate-500">{option.code}</span>
-  </div>
-);
-
-const DialCodeOptionComponent = (props: OptionProps<DialCodeOption, false>) => (
-  <components.Option {...props}>
-    <DialCodeOptionRow option={props.data} />
-  </components.Option>
-);
-
-const DialCodeSingleValueComponent = (props: SingleValueProps<DialCodeOption, false>) => (
-  <components.SingleValue {...props}>
-    <DialCodeOptionRow option={props.data} />
-  </components.SingleValue>
-);
-
-const dialCodeSelectStyles: StylesConfig<DialCodeOption, false> = {
-  control: (base, state) => ({
-    ...base,
-    minHeight: 54,
-    borderRadius: 12,
-    borderColor: state.isFocused ? '#3A63B8' : '#E2E8F0',
-    boxShadow: state.isFocused ? '0 0 0 2px rgba(58,99,184,0.22)' : '0 1px 2px rgba(15,23,42,0.06)',
-    '&:hover': {
-      borderColor: state.isFocused ? '#3A63B8' : '#CBD5E1',
-    },
-  }),
-  valueContainer: (base) => ({
-    ...base,
-    padding: '6px 10px',
-  }),
-  singleValue: (base) => ({
-    ...base,
-    margin: 0,
-    width: '100%',
-    maxWidth: '100%',
-  }),
-  input: (base) => ({
-    ...base,
-    margin: 0,
-    padding: 0,
-  }),
-  indicatorsContainer: (base) => ({
-    ...base,
-    paddingRight: 4,
-  }),
-  indicatorSeparator: () => ({ display: 'none' }),
-  dropdownIndicator: (base, state) => ({
-    ...base,
-    color: '#64748B',
-    transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : undefined,
-    transition: 'transform 0.16s ease',
-    ':hover': { color: '#334155' },
-  }),
-  menu: (base) => ({
-    ...base,
-    overflow: 'hidden',
-    borderRadius: 12,
-    border: '1px solid #E2E8F0',
-    boxShadow: '0 12px 28px rgba(15,23,42,0.16)',
-    maxWidth: 'calc(100vw - 24px)',
-    zIndex: 60,
-  }),
-  menuPortal: (base) => ({
-    ...base,
-    zIndex: 80,
-  }),
-  menuList: (base) => ({
-    ...base,
-    maxHeight: 220,
-    paddingTop: 4,
-    paddingBottom: 4,
-  }),
-  option: (base, state) => ({
-    ...base,
-    padding: '10px 12px',
-    backgroundColor: state.isSelected ? '#EAF2FF' : state.isFocused ? '#F8FAFC' : '#FFFFFF',
-    color: '#0F172A',
-    cursor: 'pointer',
-  }),
-};
-
-/** Maps UIAccountType → legacy account_structure value for backward compatibility */
+/** Maps UIAccountType → legacy account_structure for backward compatibility */
 const toAccountStructure = (accountType: UIAccountType): 'individual' | 'other' => {
   return accountType === 'individual' ? 'individual' : 'other';
 };
+
+/* ═══════════════════════════════════════════════
+   COMPONENT
+   ═══════════════════════════════════════════════ */
 
 export default function OnboardingStep5() {
   const navigate = useNavigate();
@@ -165,31 +71,27 @@ export default function OnboardingStep5() {
   const [selectedDialCountryIso, setSelectedDialCountryIso] = useState('US');
   const [isAutoDetectingDialCode, setIsAutoDetectingDialCode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showDialPicker, setShowDialPicker] = useState(false);
   const isFooterVisible = useFooterVisibility();
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+  useEffect(() => { window.scrollTo(0, 0); }, []);
 
+  /* ─── Load user + existing data ─── */
   useEffect(() => {
     const getCurrentUser = async () => {
       if (!config.supabaseClient) return;
 
       const { data: { user } } = await config.supabaseClient.auth.getUser();
-      if (!user) {
-        navigate('/login');
-        return;
-      }
+      if (!user) { navigate('/login'); return; }
       setUserId(user.id);
 
-      // Load existing data if any
       const { data: onboardingData } = await config.supabaseClient
         .from('onboarding_data')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      // Restore account type — prefer account_type, fall back to account_structure
+      // Restore account type
       if (onboardingData?.account_type) {
         const validTypes: UIAccountType[] = ['individual', 'joint', 'retirement', 'trust'];
         const saved = onboardingData.account_type as string;
@@ -197,7 +99,6 @@ export default function OnboardingStep5() {
           setSelectedAccountType(saved as UIAccountType);
         }
       } else if (onboardingData?.account_structure === 'individual') {
-        // Backward compat: old data only has account_structure
         setSelectedAccountType('individual');
       }
 
@@ -213,96 +114,70 @@ export default function OnboardingStep5() {
 
       if (cachedDial) {
         setCountryCode(cachedDial);
-        const matchedByDial = PHONE_DIAL_CODES.find((option) => option.code === cachedDial);
-        if (matchedByDial) {
-          setSelectedDialCountryIso(matchedByDial.iso);
-        }
+        const matched = PHONE_DIAL_CODES.find((o) => o.code === cachedDial);
+        if (matched) setSelectedDialCountryIso(matched.iso);
       } else {
-        // No cached dial code yet: use IP location (no permission prompt) and cache it for later steps.
         setIsAutoDetectingDialCode(true);
         try {
           const ipLoc = await locationService.getLocationByIp();
           if (ipLoc?.phoneDialCode) {
             setCountryCode(ipLoc.phoneDialCode);
-            const matchedByDial = PHONE_DIAL_CODES.find((option) => option.code === ipLoc.phoneDialCode);
-            if (matchedByDial) {
-              setSelectedDialCountryIso(matchedByDial.iso);
-            }
+            const matched = PHONE_DIAL_CODES.find((o) => o.code === ipLoc.phoneDialCode);
+            if (matched) setSelectedDialCountryIso(matched.iso);
           }
           if (ipLoc?.countryCode) {
             const iso = String(ipLoc.countryCode).toUpperCase();
-            if (PHONE_DIAL_CODES.some((option) => option.iso === iso)) {
-              setSelectedDialCountryIso(iso);
-            }
+            if (PHONE_DIAL_CODES.some((o) => o.iso === iso)) setSelectedDialCountryIso(iso);
           }
           if (!onboardingData?.gps_location_data) {
-            try {
-              await locationService.saveLocationToOnboarding(user.id, ipLoc);
-            } catch (saveErr) {
-              console.warn('[Step5] Failed to cache IP location:', saveErr);
-            }
+            try { await locationService.saveLocationToOnboarding(user.id, ipLoc); }
+            catch (e) { console.warn('[Step5] cache fail:', e); }
           }
         } catch (err) {
-          console.warn('[Step5] IP dial code detection failed:', err);
+          console.warn('[Step5] IP detection failed:', err);
         } finally {
           setIsAutoDetectingDialCode(false);
         }
       }
     };
-
     getCurrentUser();
   }, [navigate]);
 
+  /* ─── Phone formatting ─── */
   const formatPhoneNumber = (value: string) => {
-    const digits = value.replace(/\D/g, '');
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    if (digits.length <= 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-    return digits;
+    const d = value.replace(/\D/g, '');
+    if (d.length <= 3) return d;
+    if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+    if (d.length <= 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6, 10)}`;
+    return d;
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '');
-    if (value.length <= 15) {
-      setPhoneNumber(value);
-    }
+    if (value.length <= 15) setPhoneNumber(value);
   };
 
   const isValidPhone = phoneNumber.length >= 8 && phoneNumber.length <= 15;
   const canContinue = Boolean(selectedAccountType) && isValidPhone;
 
-  const dialCodeOptions = useMemo(() => {
-    if (countryCode && !PHONE_DIAL_CODES.some((c) => c.code === countryCode)) {
-      return [{ code: countryCode, country: `Custom (${countryCode})`, iso: 'US' }, ...PHONE_DIAL_CODES];
-    }
-    return PHONE_DIAL_CODES;
-  }, [countryCode]);
-
   const selectedDialOption = useMemo(() => {
-    const exactMatch = dialCodeOptions.find(
-      (option) => option.code === countryCode && option.iso === selectedDialCountryIso,
-    );
-    if (exactMatch) return exactMatch;
+    return PHONE_DIAL_CODES.find((o) => o.code === countryCode && o.iso === selectedDialCountryIso)
+      || PHONE_DIAL_CODES.find((o) => o.code === countryCode)
+      || PHONE_DIAL_CODES[0];
+  }, [countryCode, selectedDialCountryIso]);
 
-    const codeMatch = dialCodeOptions.find((option) => option.code === countryCode);
-    return codeMatch ?? null;
-  }, [countryCode, dialCodeOptions, selectedDialCountryIso]);
-
+  /* ─── Handlers ─── */
   const handleContinue = async () => {
     if (!selectedAccountType || !userId || !config.supabaseClient || !isValidPhone) return;
-
     setIsLoading(true);
     try {
       await upsertOnboardingData(userId, {
-        // Primary field — used by the profile page to display account type
         account_type: selectedAccountType,
-        // Backward-compatible field — keeps legacy consumers working
         account_structure: toAccountStructure(selectedAccountType),
         phone_number: phoneNumber,
         phone_country_code: countryCode,
         current_step: 5,
       });
-
       navigate('/onboarding/step-7');
     } catch (error) {
       console.error('Error:', error);
@@ -311,157 +186,214 @@ export default function OnboardingStep5() {
     }
   };
 
-  const handleBack = () => {
-    navigate('/onboarding/step-4');
+  const handleBack = () => navigate('/onboarding/step-4');
+  const handleSkip = () => navigate('/onboarding/step-7');
+
+  const handleSelectDialCode = (option: DialCodeOption) => {
+    setCountryCode(option.code);
+    setSelectedDialCountryIso(option.iso);
+    setShowDialPicker(false);
   };
 
+  /* ═══════════════════════════════════════════════
+     RENDER
+     ═══════════════════════════════════════════════ */
   return (
     <div
-      className="min-h-screen bg-slate-50"
-      style={{ fontFamily: "'Manrope', sans-serif" }}
+      className="bg-white min-h-[100dvh] flex flex-col relative"
+      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif", WebkitFontSmoothing: 'antialiased' }}
     >
-      <div className="onboarding-shell relative flex min-h-screen w-full flex-col bg-white max-w-[500px] mx-auto shadow-xl overflow-hidden border-x border-slate-100">
-        {/* Sticky Header */}
-        <header className="sticky top-0 z-20 flex items-center bg-white/90 px-4 pt-4 pb-2 backdrop-blur-sm sm:px-6 sm:pt-5">
-          <button
-            onClick={handleBack}
-            aria-label="Go back"
-            className="flex size-10 shrink-0 items-center justify-center rounded-full text-slate-900 transition-colors hover:bg-slate-100"
-          >
-            <BackIcon />
-          </button>
-        </header>
+      {/* ═══ iOS Navigation Bar ═══ */}
+      <nav
+        className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-[#C6C6C8]/30 flex items-end justify-between px-4 pb-2"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 12px) + 4px)', minHeight: '48px' }}
+      >
+        <button onClick={handleBack} className="text-[#007AFF] flex items-center -ml-2 active:opacity-50 transition-opacity" aria-label="Go back">
+          <span className="material-symbols-outlined text-3xl -mr-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>
+            chevron_left
+          </span>
+          <span className="text-[17px] leading-none pb-[2px]">Back</span>
+        </button>
+        <button onClick={handleSkip} className="text-[#007AFF] font-normal text-[17px] active:opacity-50 transition-opacity">
+          Skip
+        </button>
+      </nav>
 
-        <OnboardingStepProgress currentStep={5} totalSteps={12} visibleSteps={12} />
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto px-4 pb-40 sm:px-6 sm:pb-48">
-          {/* Header Section */}
-          <div className="mb-8 mt-2 text-center">
-            <h1 className="text-3xl font-bold text-slate-900">
-              A few more details
-            </h1>
-            <p className="mx-auto mt-3 max-w-sm text-base leading-relaxed text-slate-500">
-              This helps us personalize your account and keep your profile secure.
-            </p>
+      <main className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 pt-6 pb-48">
+        {/* ─── Progress Bar ─── */}
+        <div className="mb-8">
+          <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden mb-2">
+            <div className="h-full bg-[#007AFF] rounded-full transition-all duration-500" style={{ width: `${PROGRESS_PCT}%` }} />
           </div>
+          <div className="flex justify-between items-center text-xs font-medium text-[#8E8E93] uppercase tracking-wide">
+            <span>{PROGRESS_PCT}% complete</span>
+            <span>Step {CURRENT_STEP} of {TOTAL_STEPS}</span>
+          </div>
+        </div>
 
-          {/* Account Type Selection — radio button list saves to account_type */}
-          <h2 className="text-slate-900 text-base font-bold mb-3">Account type</h2>
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.04)] overflow-hidden">
+        {/* ─── Title ─── */}
+        <div className="mb-8">
+          <h1 className="text-[34px] leading-[41px] font-bold text-black tracking-tight mb-2">
+            A few more details
+          </h1>
+          <p className="text-[17px] text-[#8E8E93] leading-relaxed">
+            This helps us personalize your account and keep your profile secure.
+          </p>
+        </div>
+
+        {/* ─── Account Type — iOS Grouped Table ─── */}
+        <div className="mb-8">
+          <h2 className="text-[13px] uppercase text-[#8E8E93] font-medium mb-2 pl-4">
+            Account type
+          </h2>
+          <div className="bg-[#F2F2F7] rounded-[10px] overflow-hidden">
             {ACCOUNT_TYPE_OPTIONS.map((option, index) => {
               const isSelected = selectedAccountType === option.value;
               const isLast = index === ACCOUNT_TYPE_OPTIONS.length - 1;
-
               return (
                 <button
                   key={option.value}
                   onClick={() => setSelectedAccountType(option.value)}
-                  className={`w-full flex items-center justify-between p-5 hover:bg-slate-50 transition-colors ${
-                    !isLast ? 'border-b border-gray-100' : ''
+                  className={`w-full flex items-center justify-between pl-4 pr-4 py-3.5 bg-white active:bg-gray-100 transition-colors ${
+                    !isLast ? 'border-b border-[#C6C6C8]/40 ml-0' : ''
                   }`}
-                  aria-label={`Select ${option.label} account`}
                   role="radio"
                   aria-checked={isSelected}
+                  aria-label={`Select ${option.label} account`}
                 >
-                  <span className="text-slate-900 text-base font-medium">{option.label}</span>
-                  <div
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                      isSelected
-                        ? 'border-[#2b8cee] bg-[#2b8cee]'
-                        : 'border-slate-300 bg-white'
-                    }`}
-                  >
-                    {isSelected && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-white" />
-                    )}
-                  </div>
+                  <span className="text-[17px] text-black">{option.label}</span>
+                  {isSelected && (
+                    <span
+                      className="material-symbols-outlined text-[#007AFF] text-xl"
+                      style={{ fontVariationSettings: "'FILL' 0, 'wght' 500" }}
+                    >
+                      check
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
+        </div>
 
-          {/* Phone Number */}
-          <div className="mt-8">
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <h2 className="text-slate-900 text-base font-bold">Phone number</h2>
-              {isAutoDetectingDialCode && (
-                <span className="text-xs font-semibold text-slate-400">Detecting code...</span>
-              )}
-            </div>
-            <p className="text-slate-500 text-sm leading-relaxed mb-4">
-              We&apos;ll use this to verify your identity when needed.
-            </p>
-
-            <div className="flex w-full gap-3">
-              <div className="relative min-w-[124px] flex-[0.9]">
-                <Select<DialCodeOption, false>
-                  inputId="phone-country-code"
-                  className="w-full"
-                  options={dialCodeOptions}
-                  value={selectedDialOption}
-                  onChange={(selected) => {
-                    if (!selected) return;
-                    setSelectedDialCountryIso(selected.iso);
-                    setCountryCode(selected.code);
-                  }}
-                  isSearchable
-                  placeholder="Country"
-                  styles={dialCodeSelectStyles}
-                  components={{
-                    Option: DialCodeOptionComponent,
-                    SingleValue: DialCodeSingleValueComponent,
-                  }}
-                  menuPlacement="auto"
-                  menuPosition="fixed"
-                  maxMenuHeight={220}
-                  menuShouldScrollIntoView={false}
-                  menuPortalTarget={typeof window !== 'undefined' ? document.body : undefined}
-                  noOptionsMessage={() => 'No countries found'}
-                />
-              </div>
-
-              <div className="relative flex-1">
-                <input
-                  type="tel"
-                  value={formatPhoneNumber(phoneNumber)}
-                  onChange={handlePhoneChange}
-                  placeholder="(000) 000-0000"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 placeholder:text-slate-400 shadow-sm outline-none transition-all duration-200 focus:border-transparent focus:ring-2 focus:ring-[#3A63B8]"
-                />
-              </div>
-            </div>
-
-            <p className="pt-1 text-xs text-slate-500">
-              Standard message and data rates may apply.
-            </p>
+        {/* ─── Phone Number ─── */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-[22px] leading-[28px] font-bold text-black">Phone number</h2>
+            {isAutoDetectingDialCode && (
+              <span className="text-xs font-medium text-[#8E8E93]">Detecting...</span>
+            )}
           </div>
-        </main>
+          <p className="text-[13px] text-[#8E8E93] mb-4">
+            We&apos;ll use this to verify your identity when needed.
+          </p>
 
-        {/* Fixed Footer - Hidden when main footer is visible */}
-        {!isFooterVisible && (
-          <div
-            className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-[500px] mx-auto border-t border-slate-100 bg-white/90 backdrop-blur-md px-4 sm:px-6 pt-4 sm:pt-5 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-[0_-4px_20px_rgba(0,0,0,0.04)]"
-            data-onboarding-footer
+          {/* iOS-style phone input */}
+          <div className="bg-[#F2F2F7] rounded-[10px] flex items-center overflow-hidden h-[50px] ring-1 ring-transparent focus-within:ring-[#007AFF] transition-all">
+            {/* Country code selector */}
+            <button
+              onClick={() => setShowDialPicker(true)}
+              className="flex items-center pl-4 pr-3 h-full border-r border-[#C6C6C8]/40 bg-white active:bg-gray-100 transition-colors"
+            >
+              <ReactCountryFlag
+                countryCode={selectedDialOption.iso}
+                svg
+                style={{ width: '1.25em', height: '1.25em', borderRadius: 2, flexShrink: 0 }}
+                aria-label={selectedDialOption.country}
+              />
+              <span className="text-[17px] font-medium text-black ml-2">{selectedDialOption.code}</span>
+              <span className="material-symbols-outlined text-[#8E8E93] text-lg ml-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>
+                expand_more
+              </span>
+            </button>
+
+            {/* Phone input */}
+            <input
+              type="tel"
+              value={formatPhoneNumber(phoneNumber)}
+              onChange={handlePhoneChange}
+              placeholder="(000) 000-0000"
+              className="flex-1 h-full bg-white border-none focus:ring-0 text-[17px] text-black placeholder-gray-400 px-4 outline-none"
+            />
+          </div>
+
+          <p className="text-xs text-[#8E8E93] mt-2 ml-4">
+            Standard message and data rates may apply.
+          </p>
+        </div>
+      </main>
+
+      {/* ═══ Fixed Footer — 2-column ═══ */}
+      {!isFooterVisible && (
+        <div
+          className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t border-[#C6C6C8]/30 z-40"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+          data-onboarding-footer
+        >
+          <div className="max-w-md mx-auto flex gap-4">
+            <button
+              onClick={handleSkip}
+              className="flex-1 bg-[#E5E5EA] text-[#007AFF] font-semibold text-[17px] py-[14px] rounded-xl active:opacity-70 transition-opacity flex items-center justify-center"
+            >
+              Skip
+            </button>
+            <button
+              onClick={handleContinue}
+              disabled={!canContinue || isLoading}
+              data-onboarding-cta
+              className={`flex-1 font-semibold text-[17px] py-[14px] rounded-xl shadow-sm transition-all flex items-center justify-center ${
+                canContinue && !isLoading
+                  ? 'bg-[#007AFF] text-white active:opacity-80'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {isLoading ? 'Saving...' : 'Continue'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Dial Code Picker Modal ═══ */}
+      {showDialPicker && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setShowDialPicker(false)} />
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl max-h-[60vh] flex flex-col"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
           >
-            <div className="flex flex-col gap-3 sm:gap-4">
-              {/* Continue Button */}
-              <button
-                onClick={handleContinue}
-                disabled={!canContinue || isLoading}
-                data-onboarding-cta
-                className={`flex w-full h-11 sm:h-12 cursor-pointer items-center justify-center rounded-full px-6 text-sm sm:text-base font-semibold transition-all active:scale-[0.98] ${
-                  canContinue && !isLoading
-                    ? 'bg-[#3A63B8] text-white hover:bg-[#2e4f94] shadow-lg shadow-blue-500/20'
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                }`}
-              >
-                {isLoading ? 'Saving...' : 'Continue'}
-              </button>
+            <div className="flex items-center justify-between p-4 border-b border-[#C6C6C8]/30">
+              <h3 className="text-[17px] font-semibold text-black">Select Country Code</h3>
+              <button onClick={() => setShowDialPicker(false)} className="text-[#007AFF] font-medium text-[17px]">Done</button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {PHONE_DIAL_CODES.map((option) => (
+                <button
+                  key={option.iso}
+                  onClick={() => handleSelectDialCode(option)}
+                  className={`w-full flex items-center justify-between px-4 py-3 border-b border-[#C6C6C8]/20 active:bg-gray-100 transition-colors ${
+                    option.code === countryCode && option.iso === selectedDialCountryIso ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <ReactCountryFlag
+                      countryCode={option.iso}
+                      svg
+                      style={{ width: '1.25em', height: '1.25em', borderRadius: 2 }}
+                      aria-label={option.country}
+                    />
+                    <span className="text-[17px] text-black">{option.country}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[15px] font-medium text-[#8E8E93]">{option.code}</span>
+                    {option.code === countryCode && option.iso === selectedDialCountryIso && (
+                      <span className="material-symbols-outlined text-[#007AFF] text-xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 500" }}>check</span>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
