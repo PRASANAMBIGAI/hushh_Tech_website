@@ -46,6 +46,19 @@ function MeetCeoPage() {
   // Fetch calendar when paid
   useEffect(() => { if (paymentState === 'paid') fetchCalendarSlots(); }, [paymentState]);
 
+  /* ── Send Hushh Coins credit email (fire-and-forget) ── */
+  const sendCoinsEmail = async (email: string, name: string, coins: number) => {
+    try {
+      const { data: { session } } = await config.supabaseClient!.auth.getSession();
+      if (!session) return;
+      await fetch(`${config.SUPABASE_URL}/functions/v1/coins-credit-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ recipientEmail: email, recipientName: name, coinsAwarded: coins }),
+      });
+    } catch (err) { console.error('Coins email failed (non-blocking):', err); }
+  };
+
   /* ── API Handlers ── */
 
   const checkPaymentStatus = async () => {
@@ -56,7 +69,7 @@ function MeetCeoPage() {
       const { data: payment } = await config.supabaseClient
         .from('ceo_meeting_payments').select('*').eq('user_id', user.id).maybeSingle();
       if (payment?.payment_status === 'completed') {
-        setHushhCoins(payment.hushh_coins_awarded || 100);
+        setHushhCoins(payment.hushh_coins_awarded || 300000);
         setPaymentState(payment.calendly_booked ? 'booked' : 'paid');
       } else { setPaymentState('not_paid'); }
     } catch { setPaymentState('not_paid'); }
@@ -73,7 +86,7 @@ function MeetCeoPage() {
       });
       const result = await res.json();
       if (result.success) {
-        setHushhCoins(result.hushhCoinsAwarded || 100);
+        setHushhCoins(result.hushhCoinsAwarded || 300000);
         setPaymentState('paid');
         window.history.replaceState({}, '', '/onboarding/meet-ceo');
       } else throw new Error(result.error || 'Verification failed');
@@ -108,11 +121,13 @@ function MeetCeoPage() {
       // Upsert payment record with coupon
       await config.supabaseClient!.from('ceo_meeting_payments').upsert({
         user_id: user.id, payment_status: 'completed', payment_method: 'coupon',
-        coupon_code: code, hushh_coins_awarded: 100, amount: 0, currency: 'usd',
+        coupon_code: code, hushh_coins_awarded: 300000, amount: 0, currency: 'usd',
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
-      setHushhCoins(100);
+      setHushhCoins(300000);
       setPaymentState('paid');
+      // Send coins credit email notification
+      sendCoinsEmail(user.email || '', user.user_metadata?.full_name || 'Hushh User', 300000);
     } catch (err: any) { setCouponError(err.message || 'Failed to redeem coupon'); }
     finally { setCouponLoading(false); }
   };
@@ -230,7 +245,7 @@ function MeetCeoPage() {
                     <span className="material-symbols-outlined text-[#FF9500] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>monetization_on</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-black">100 Hushh Coins</p>
+                    <p className="text-[15px] font-semibold text-black">300,000 Hushh Coins</p>
                     <p className="text-[13px] text-[#8E8E93]">Credited instantly — use to book your session</p>
                   </div>
                 </div>
@@ -295,7 +310,7 @@ function MeetCeoPage() {
                 <span className="material-symbols-outlined text-[#34C759] text-[40px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}>check_circle</span>
               </div>
               <h1 className="text-[28px] font-bold text-black tracking-tight mb-1">You're Verified!</h1>
-              <p className="text-[15px] text-[#8E8E93]"><span className="font-bold text-black">{hushhCoins} Hushh Coins</span> credited</p>
+              <p className="text-[15px] text-[#8E8E93]"><span className="font-bold text-black">{hushhCoins.toLocaleString()} Hushh Coins</span> credited</p>
             </div>
 
             <div className="mb-4 p-4 bg-[#F2F2F7] rounded-xl text-center">
@@ -378,7 +393,7 @@ function MeetCeoPage() {
             <h1 className="text-[28px] font-bold text-black tracking-tight mb-2">All Set!</h1>
             <p className="text-[15px] text-[#8E8E93] mb-1">Your consultation is scheduled with</p>
             <p className="text-[17px] font-semibold text-black">Manish Sainani</p>
-            <p className="text-[13px] text-[#8E8E93] mt-1">{hushhCoins} Hushh Coins earned 🪙</p>
+            <p className="text-[13px] text-[#8E8E93] mt-1">{hushhCoins.toLocaleString()} Hushh Coins earned 🪙</p>
           </div>
         )}
       </main>
