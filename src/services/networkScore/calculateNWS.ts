@@ -335,8 +335,8 @@ export function calculateNWSFromDB(financialRow: any): NWSResult {
   }
 
   return calculateNWS({
-    balanceData: financialRow.balance_data || null,
-    investmentsData: financialRow.investments_data || null,
+    balanceData: financialRow.balances || financialRow.balance_data || null,
+    investmentsData: financialRow.investments || financialRow.investments_data || null,
     identityMatchData: financialRow.identity_match_data || null,
   });
 }

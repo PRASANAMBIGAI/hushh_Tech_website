@@ -387,7 +387,7 @@ const HushhUserProfilePage: React.FC = () => {
         try {
           const { data: financialData } = await supabase
             .from('user_financial_data')
-            .select('balance_data, investments_data, identity_match_data, nws_score')
+            .select('balances, investments, identity_match_data, nws_score')
             .eq('user_id', user.id)
             .maybeSingle();
 
@@ -406,6 +406,25 @@ const HushhUserProfilePage: React.FC = () => {
               }).eq('user_id', user.id).then(() => {
                 console.log('[Profile] NWS score persisted to DB');
               });
+
+              // Send NWS score email notification (fire-and-forget)
+              if (nws.score > 0) {
+                const { data: { session: sess } } = await supabase.auth.getSession();
+                if (sess) {
+                  fetch(`${resources.config.SUPABASE_URL}/functions/v1/nws-score-notification`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess.access_token}` },
+                    body: JSON.stringify({
+                      recipientEmail: user.email,
+                      recipientName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Investor',
+                      nwsScore: nws.score,
+                      nwsGrade: nws.grade,
+                      nwsLabel: nws.label,
+                      breakdown: nws.breakdown,
+                    }),
+                  }).then(() => console.log('[Profile] NWS email sent')).catch(() => {});
+                }
+              }
             }
           }
         } catch (nwsErr) {
