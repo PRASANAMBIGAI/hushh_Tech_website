@@ -190,25 +190,39 @@ function MeetCeoPage() {
             {/* Hero */}
             <div className="text-center mb-6">
               <div className="w-[72px] h-[72px] mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#007AFF] to-[#5856D6] flex items-center justify-center shadow-lg">
-                <span className="material-symbols-outlined text-white text-[36px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>verified_user</span>
+                <span className="material-symbols-outlined text-white text-[36px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>person_celebrate</span>
               </div>
-              <h1 className="text-[28px] font-bold text-black tracking-tight leading-tight mb-1">Exclusive Consultation</h1>
-              <p className="text-[15px] text-[#8E8E93]">Valued at <span className="line-through">$3,000</span> — yours for just <span className="font-bold text-[#007AFF]">$1</span></p>
+              <h1 className="text-[28px] font-bold text-black tracking-tight leading-tight mb-1">Meet Your Fund Manager</h1>
+              <p className="text-[15px] text-[#8E8E93] leading-snug">A private 1-hour session with<br/><span className="font-semibold text-black">Manish Sainani</span>, Hedge Fund Manager</p>
+            </div>
+
+            {/* The Story — Why this is special */}
+            <div className="mb-5 p-5 bg-gradient-to-br from-[#F0F5FF] to-[#F8F0FF] rounded-2xl border border-[#007AFF]/10">
+              <p className="text-[15px] text-[#1D1D1F] leading-relaxed mb-3">
+                A personal consultation with Manish typically costs <span className="font-bold">$3,000</span> per session.
+              </p>
+              <p className="text-[15px] text-[#1D1D1F] leading-relaxed mb-3">
+                Because you've completed the full Hushh KYC onboarding, you've unlocked this as an <span className="font-semibold text-[#007AFF]">exclusive benefit</span> — available for just <span className="font-bold text-[#007AFF]">$1</span>.
+              </p>
+              <p className="text-[13px] text-[#636366] leading-relaxed">
+                This is your opportunity to sit down 1-on-1 with a hedge fund manager, ask questions about investment strategies, portfolio allocation, and get personalized guidance.
+              </p>
             </div>
 
             {/* What You Get — iOS Grouped List */}
-            <div className="mb-6">
-              <p className="text-[13px] uppercase text-[#8E8E93] font-medium tracking-wide px-4 mb-2">What you get</p>
+            <div className="mb-5">
+              <p className="text-[13px] uppercase text-[#8E8E93] font-medium tracking-wide px-4 mb-2">Here's what you unlock</p>
               <div className="bg-white rounded-xl border border-[#C6C6C8]/40 overflow-hidden divide-y divide-[#C6C6C8]/30">
                 {/* Item 1 */}
                 <div className="flex items-center gap-3 px-4 py-3.5">
-                  <div className="w-9 h-9 rounded-lg bg-[#34C759]/10 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-[#34C759] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                  <div className="w-9 h-9 rounded-lg bg-[#007AFF]/10 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[#007AFF] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_month</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-black">Human Verification</p>
-                    <p className="text-[13px] text-[#8E8E93]">Confirm you're a real investor</p>
+                    <p className="text-[15px] font-semibold text-black">1-Hour Private Consultation</p>
+                    <p className="text-[13px] text-[#8E8E93]">With Manish Sainani, Hedge Fund Manager</p>
                   </div>
+                  <span className="text-[13px] font-medium text-[#8E8E93] line-through shrink-0">$3,000</span>
                 </div>
                 {/* Item 2 */}
                 <div className="flex items-center gap-3 px-4 py-3.5">
@@ -217,28 +231,32 @@ function MeetCeoPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[15px] font-semibold text-black">100 Hushh Coins</p>
-                    <p className="text-[13px] text-[#8E8E93]">Credited instantly to your account</p>
+                    <p className="text-[13px] text-[#8E8E93]">Credited instantly — use to book your session</p>
                   </div>
                 </div>
                 {/* Item 3 */}
                 <div className="flex items-center gap-3 px-4 py-3.5">
-                  <div className="w-9 h-9 rounded-lg bg-[#007AFF]/10 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-[#007AFF] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_month</span>
+                  <div className="w-9 h-9 rounded-lg bg-[#34C759]/10 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[#34C759] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-black">1-Hour Strategy Session</p>
-                    <p className="text-[13px] text-[#8E8E93]">With Manish Sainani, Hedge Fund Manager</p>
+                    <p className="text-[15px] font-semibold text-black">KYC Verified Badge</p>
+                    <p className="text-[13px] text-[#8E8E93]">You've completed identity verification</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Info Banner */}
-            <div className="mb-6 p-4 bg-[#F2F2F7] rounded-xl">
-              <p className="text-[13px] text-[#636366] leading-relaxed text-center">
-                This <span className="font-semibold">$1 verification</span> helps us filter bots and confirms your identity.
-                Redeem your Hushh Coins to schedule a private session with our Hedge Fund Manager.
-              </p>
+            {/* Price highlight */}
+            <div className="mb-5 flex items-center justify-center gap-3 p-4 bg-[#F2F2F7] rounded-xl">
+              <div className="text-center">
+                <p className="text-[13px] text-[#8E8E93] mb-1">Your price today</p>
+                <div className="flex items-baseline gap-2 justify-center">
+                  <span className="text-[32px] font-bold text-[#007AFF] leading-none">$1</span>
+                  <span className="text-[15px] text-[#C7C7CC] line-through">$3,000</span>
+                </div>
+                <p className="text-[11px] text-[#8E8E93] mt-1">Exclusive KYC onboarding benefit</p>
+              </div>
             </div>
 
             {/* Coupon Section */}
