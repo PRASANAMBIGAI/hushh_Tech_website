@@ -66,8 +66,10 @@ export default function Navbar() {
   const isMobile = useBreakpointValue({ base: true, lg: false });
   const isDesktop = isMobile === false;
 
-  // Hide ticker strip on onboarding pages to keep UX clean
+  // Hide ticker strip on onboarding & profile pages to keep UX clean
   const isOnboarding = location.pathname.startsWith('/onboarding');
+  const isProfilePage = location.pathname.startsWith('/hushh-user-profile');
+  const hideTicker = isOnboarding || isProfilePage;
 
   // Fetch real-time stock quotes (refreshes every 2 minutes for 27 stocks)
   const { quotes, loading: quotesLoading, lastUpdated } = useStockQuotes(120000);
@@ -334,8 +336,8 @@ export default function Navbar() {
           </div>
         </nav>
 
-        {/* Chip-based Ticker Strip - BELOW Navigation (hidden on onboarding pages) */}
-        {!isOnboarding && (
+        {/* Chip-based Ticker Strip - BELOW Navigation (hidden on onboarding & profile pages) */}
+        {!hideTicker && (
         <section className="relative w-full bg-[#F8F9FA] py-2.5 border-b border-gray-200">
           {/* Ticker Marquee with Fade Mask */}
           <div className="ticker-mask relative flex w-full overflow-hidden">
@@ -372,8 +374,8 @@ export default function Navbar() {
         )}
       </header>
 
-      {/* Spacer for fixed header — shorter on onboarding (no ticker) */}
-      <div className={isOnboarding ? "h-16" : "h-28"} />
+      {/* Spacer for fixed header — shorter when ticker is hidden */}
+      <div className={hideTicker ? "h-16" : "h-28"} />
 
       {/* iOS Native Side Menu */}
       {isOpen && (
@@ -466,8 +468,8 @@ export default function Navbar() {
                 ))}
               </div>
 
-              {/* Section 3: Hushh Coins (only when authenticated) */}
-              {isAuthenticated && (
+              {/* Section 3: Hushh Coins (only when authenticated AND coins > 0 — after $1 payment or coupon) */}
+              {isAuthenticated && hushhCoins !== null && hushhCoins > 0 && (
                 <div className="rounded-[10px] overflow-hidden mb-5 shadow-sm">
                   {/* Coins Balance Card — iOS Wallet style */}
                   <div className="bg-gradient-to-br from-[#1C1C1E] to-[#2C2C2E] p-4 rounded-t-[10px]">
