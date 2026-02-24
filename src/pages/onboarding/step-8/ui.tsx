@@ -1,10 +1,20 @@
 /**
- * Step 8 - Address Entry (iOS-native design) — UI Component
- *
- * Pure presentation component. All logic lives in ./logic.ts
+ * Step 8 — Enter Your Address
+ * Premium Hushh design matching Step 1/2/4/5/7.
+ * Logic stays in logic.ts — zero logic changes.
+ * Uses HushhTechBackHeader + HushhTechCta reusable components.
  */
-import { useStep8Logic, PROGRESS_PCT, DISPLAY_STEP, TOTAL_STEPS, validateAddress, validateZip } from './logic';
-import { SearchableSelect } from '../../../components/onboarding/SearchableSelect';
+import {
+  useStep8Logic,
+  PROGRESS_PCT,
+  DISPLAY_STEP,
+  TOTAL_STEPS,
+} from "./logic";
+import { SearchableSelect } from "../../../components/onboarding/SearchableSelect";
+import HushhTechBackHeader from "../../../components/hushh-tech-back-header/HushhTechBackHeader";
+import HushhTechCta, {
+  HushhTechCtaVariant,
+} from "../../../components/hushh-tech-cta/HushhTechCta";
 
 export default function OnboardingStep8() {
   const {
@@ -19,7 +29,6 @@ export default function OnboardingStep8() {
     touched,
     errors,
     isValid,
-    isFooterVisible,
     dropdowns,
     handleBack,
     handleSkip,
@@ -31,114 +40,196 @@ export default function OnboardingStep8() {
   } = useStep8Logic();
 
   return (
-    <div
-      className="bg-white min-h-[100dvh]"
-      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif", WebkitFontSmoothing: 'antialiased' }}
-    >
-      {/* ═══ iOS Navigation Bar ═══ */}
-      <nav
-        className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#C6C6C8]/30 flex items-end justify-between px-4 pb-2"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top, 12px) + 4px)', minHeight: '48px' }}
-      >
-        <button onClick={handleBack} className="text-[#007AFF] flex items-center -ml-2 active:opacity-50 transition-opacity" aria-label="Go back">
-          <span className="material-symbols-outlined text-3xl -mr-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>chevron_left</span>
-          <span className="text-[17px] leading-none pb-[2px]">Back</span>
-        </button>
-        <span className="font-semibold text-[17px] text-black">Setup</span>
-        <button onClick={handleSkip} className="text-[17px] text-[#007AFF] font-normal active:opacity-50 transition-opacity">Skip</button>
-      </nav>
+    <div className="bg-white text-gray-900 min-h-screen antialiased flex flex-col selection:bg-black selection:text-white">
+      {/* ═══ Header ═══ */}
+      <HushhTechBackHeader onBackClick={handleBack} rightLabel="FAQs" />
 
-      <main className="max-w-md mx-auto w-full px-4 pt-4 pb-48">
-        {/* ─── Progress Bar ─── */}
-        <div className="mb-6 space-y-2">
-          <span className="text-[13px] text-[#8E8E93] font-medium uppercase tracking-wide">Onboarding Progress</span>
-          <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full bg-[#007AFF] rounded-full transition-all duration-500" style={{ width: `${PROGRESS_PCT}%` }} />
+      <main className="px-6 flex-grow max-w-md mx-auto w-full pb-48">
+        {/* ── Progress Bar ── */}
+        <div className="py-4">
+          <div className="flex justify-between text-[11px] font-semibold tracking-wide text-gray-500 mb-3 lowercase">
+            <span>
+              step {DISPLAY_STEP}/{TOTAL_STEPS}
+            </span>
+            <span>{PROGRESS_PCT}% complete</span>
           </div>
-          <div className="flex justify-between items-center text-[13px] text-[#8E8E93] font-normal">
-            <span className="text-[#007AFF] font-medium">{PROGRESS_PCT}% complete</span>
-            <span>Step {DISPLAY_STEP}/{TOTAL_STEPS}</span>
+          <div className="h-0.5 w-full bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-black transition-all duration-500"
+              style={{ width: `${PROGRESS_PCT}%` }}
+            />
           </div>
         </div>
 
-        {/* ─── Title ─── */}
-        <div className="mb-8 space-y-2">
-          <h1 className="text-[34px] leading-[41px] font-bold text-black tracking-tight">
-            Enter your address
+        {/* ── Title Section ── */}
+        <section className="py-8">
+          <h3 className="text-[11px] tracking-wide text-gray-500 lowercase mb-4 font-semibold">
+            residence
+          </h3>
+          <h1
+            className="text-[2.75rem] leading-[1.1] font-normal text-black tracking-tight lowercase"
+            style={{ fontFamily: "'Playfair Display', serif" }}
+          >
+            enter your
+            <br />
+            <span className="text-gray-400 italic font-normal">address</span>
           </h1>
-          <p className="text-[17px] text-gray-500 leading-relaxed">
-            Please provide your primary residence address.
+          <p className="text-sm text-gray-500 mt-4 leading-relaxed lowercase font-medium">
+            please provide your primary residence address.
           </p>
-        </div>
+        </section>
 
-        {/* ─── Detection status ─── */}
+        {/* ── Detection Status ── */}
         {(isDetecting || detectionStatus) && (
-          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl mb-4 text-sm font-medium ${
-            isDetecting ? 'bg-blue-50 text-[#007AFF]' : 'bg-green-50 text-green-600'
-          }`}>
-            {isDetecting && <div className="animate-spin h-4 w-4 border-2 border-[#007AFF] border-t-transparent rounded-full" />}
-            <span>{detectionStatus}</span>
+          <div className="flex items-center gap-3 py-4 px-1 mb-4 border-b border-gray-100">
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+              {isDetecting ? (
+                <div className="animate-spin h-5 w-5 border-2 border-black border-t-transparent rounded-full" />
+              ) : (
+                <span
+                  className="material-symbols-outlined text-green-600 text-lg"
+                  style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}
+                >
+                  check
+                </span>
+              )}
+            </div>
+            <p className="text-sm font-medium text-gray-700 lowercase">
+              {detectionStatus}
+            </p>
           </div>
         )}
 
-        {/* ─── Use my current location ─── */}
-        <div className="mb-8">
+        {/* ── Use Current Location ── */}
+        <div className="py-5 border-b border-gray-200 mb-6">
           <button
             type="button"
             onClick={handleDetectClick}
             disabled={isDetecting}
-            className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-[#007AFF]/10 rounded-xl active:opacity-70 transition-opacity disabled:opacity-50"
+            className="flex items-center gap-4 w-full text-left group disabled:opacity-50"
+            aria-label="Use my current location"
           >
-            <span className="material-symbols-outlined text-[#007AFF] text-xl" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>near_me</span>
-            <span className="text-[17px] font-medium text-[#007AFF]">Use my current location</span>
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0 group-hover:bg-gray-200 transition-colors">
+              <span
+                className="material-symbols-outlined text-gray-700 text-lg"
+                style={{ fontVariationSettings: "'wght' 400" }}
+              >
+                my_location
+              </span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900 lowercase">
+                use my current location
+              </p>
+              <p className="text-xs text-gray-500 lowercase font-medium">
+                auto-fill address using gps
+              </p>
+            </div>
           </button>
         </div>
 
-        {/* ─── Error ─── */}
+        {/* ── Error ── */}
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700">{error}</div>
+          <div className="mb-6 flex items-center gap-3 py-4 px-1 border-b border-red-100">
+            <div className="w-10 h-10 rounded-full bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+              <span
+                className="material-symbols-outlined text-red-500 text-lg"
+                style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}
+              >
+                error
+              </span>
+            </div>
+            <p className="text-sm font-medium text-red-700 lowercase">
+              {error}
+            </p>
+          </div>
         )}
 
-        {/* ─── Address Lines — iOS Grouped Table ─── */}
-        <div className="overflow-hidden rounded-[10px] bg-white mb-6">
-          <div className="pl-4 pr-4 py-3 flex border-b border-[#C6C6C8]/40">
-            <div className="w-1/3 min-w-[120px] text-[17px] text-black font-normal shrink-0">Address line 1</div>
-            <input
-              type="text"
-              value={addressLine1}
-              onChange={(e) => handleAddressLine1Change(e.target.value)}
-              onBlur={() => handleBlur('addressLine1', addressLine1)}
-              placeholder="Street address"
-              className="flex-1 bg-transparent border-0 p-0 text-[17px] text-black placeholder-gray-400 focus:ring-0 text-right outline-none"
-              autoComplete="address-line1"
-            />
+        {/* ── Address Fields ── */}
+        <section className="space-y-0 mb-6">
+          {/* Address Line 1 */}
+          <div className="py-5 border-b border-gray-200">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                <span
+                  className="material-symbols-outlined text-gray-700 text-lg"
+                  style={{ fontVariationSettings: "'wght' 400" }}
+                >
+                  location_on
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <label
+                  htmlFor="addressLine1"
+                  className="text-sm font-semibold text-gray-900 lowercase block mb-1"
+                >
+                  address line 1
+                </label>
+                <input
+                  id="addressLine1"
+                  type="text"
+                  value={addressLine1}
+                  onChange={(e) => handleAddressLine1Change(e.target.value)}
+                  onBlur={() => handleBlur("addressLine1", addressLine1)}
+                  placeholder="street address"
+                  className="w-full text-sm text-gray-700 font-medium lowercase bg-transparent border-none outline-none p-0 placeholder-gray-400 focus:ring-0"
+                  autoComplete="address-line1"
+                  style={{ textTransform: "lowercase" }}
+                />
+              </div>
+            </div>
           </div>
-          <div className="pl-4 pr-4 py-3 flex">
-            <div className="w-1/3 min-w-[120px] text-[17px] text-black font-normal shrink-0">Address line 2</div>
-            <input
-              type="text"
-              value={addressLine2}
-              onChange={(e) => setAddressLine2(e.target.value)}
-              placeholder="Apt, Suite, Bldg (Optional)"
-              className="flex-1 bg-transparent border-0 p-0 text-[17px] text-black placeholder-gray-400 focus:ring-0 text-right outline-none"
-              autoComplete="address-line2"
-            />
+          {touched.addressLine1 && errors.addressLine1 && (
+            <p className="text-xs text-red-500 pl-14 py-1">
+              {errors.addressLine1}
+            </p>
+          )}
+
+          {/* Address Line 2 */}
+          <div className="py-5 border-b border-gray-200">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                <span
+                  className="material-symbols-outlined text-gray-700 text-lg"
+                  style={{ fontVariationSettings: "'wght' 400" }}
+                >
+                  apartment
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <label
+                  htmlFor="addressLine2"
+                  className="text-sm font-semibold text-gray-900 lowercase block mb-1"
+                >
+                  address line 2
+                </label>
+                <input
+                  id="addressLine2"
+                  type="text"
+                  value={addressLine2}
+                  onChange={(e) => setAddressLine2(e.target.value)}
+                  placeholder="apt, suite, bldg (optional)"
+                  className="w-full text-sm text-gray-700 font-medium lowercase bg-transparent border-none outline-none p-0 placeholder-gray-400 focus:ring-0"
+                  autoComplete="address-line2"
+                  style={{ textTransform: "lowercase" }}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
-        {touched.addressLine1 && errors.addressLine1 && (
-          <p className="text-xs text-red-500 -mt-4 mb-4 px-4">{errors.addressLine1}</p>
-        )}
-
-        {/* ─── Country / State / City / ZIP — iOS Grouped Table ─── */}
-        <div className="overflow-hidden rounded-[10px] bg-white mb-2">
+        {/* ── Country / State / City / ZIP ── */}
+        <section className="space-y-0 mb-6">
           {/* Country */}
-          <div className="border-b border-[#C6C6C8]/40">
+          <div className="border-b border-gray-200">
             <SearchableSelect
               id="country"
               label="Country"
               value={dropdowns.country}
-              options={dropdowns.countries.map((c) => ({ value: c.isoCode, label: c.name }))}
+              options={dropdowns.countries.map((c) => ({
+                value: c.isoCode,
+                label: c.name,
+              }))}
               onChange={dropdowns.setCountry}
               placeholder="Search country..."
               required
@@ -147,12 +238,15 @@ export default function OnboardingStep8() {
           </div>
 
           {/* State */}
-          <div className="border-b border-[#C6C6C8]/40">
+          <div className="border-b border-gray-200">
             <SearchableSelect
               id="state"
               label="State / Province"
               value={dropdowns.state}
-              options={dropdowns.states.map((s) => ({ value: s.isoCode, label: s.name }))}
+              options={dropdowns.states.map((s) => ({
+                value: s.isoCode,
+                label: s.name,
+              }))}
               onChange={dropdowns.setState}
               placeholder="Search state..."
               disabled={!dropdowns.country}
@@ -165,12 +259,15 @@ export default function OnboardingStep8() {
           </div>
 
           {/* City */}
-          <div className="border-b border-[#C6C6C8]/40">
+          <div className="border-b border-gray-200">
             <SearchableSelect
               id="city"
               label="City"
               value={dropdowns.city}
-              options={dropdowns.cities.map((c) => ({ value: c.name, label: c.name }))}
+              options={dropdowns.cities.map((c) => ({
+                value: c.name,
+                label: c.name,
+              }))}
               onChange={dropdowns.setCity}
               placeholder="Search city..."
               disabled={!dropdowns.state}
@@ -183,59 +280,78 @@ export default function OnboardingStep8() {
           </div>
 
           {/* ZIP Code */}
-          <div className="pl-4 pr-4 py-3 flex">
-            <div className="w-1/3 min-w-[90px] text-[17px] text-black font-normal shrink-0">ZIP Code</div>
-            <input
-              type="text"
-              value={zipCode}
-              inputMode="text"
-              onChange={(e) => handleZipCodeChange(e.target.value)}
-              onBlur={() => handleBlur('zipCode', zipCode)}
-              placeholder="e.g. 10001"
-              className="flex-1 bg-transparent border-0 p-0 text-[17px] text-black placeholder-gray-400 focus:ring-0 text-right outline-none"
-              autoComplete="postal-code"
-            />
+          <div className="py-5 border-b border-gray-200">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                <span
+                  className="material-symbols-outlined text-gray-700 text-lg"
+                  style={{ fontVariationSettings: "'wght' 400" }}
+                >
+                  pin
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <label
+                  htmlFor="zipCode"
+                  className="text-sm font-semibold text-gray-900 lowercase block mb-1"
+                >
+                  zip / postal code
+                </label>
+                <input
+                  id="zipCode"
+                  type="text"
+                  value={zipCode}
+                  inputMode="text"
+                  onChange={(e) => handleZipCodeChange(e.target.value)}
+                  onBlur={() => handleBlur("zipCode", zipCode)}
+                  placeholder="e.g. 10001"
+                  className="w-full text-sm text-gray-700 font-medium lowercase bg-transparent border-none outline-none p-0 placeholder-gray-400 focus:ring-0"
+                  autoComplete="postal-code"
+                />
+              </div>
+            </div>
           </div>
-        </div>
+          {touched.zipCode && errors.zipCode ? (
+            <p className="text-xs text-red-500 pl-14 py-1">
+              {errors.zipCode}
+            </p>
+          ) : (
+            <p className="text-[10px] text-gray-400 pl-14 pt-1 lowercase font-medium">
+              supports numeric and alphanumeric codes based on region.
+            </p>
+          )}
+        </section>
 
-        {touched.zipCode && errors.zipCode ? (
-          <p className="text-xs text-red-500 px-4 mb-4">{errors.zipCode}</p>
-        ) : (
-          <p className="text-[13px] text-gray-500 px-4 mb-4">
-            Supports numeric and alphanumeric codes based on region selection.
-          </p>
-        )}
+        {/* ── CTAs — Continue & Skip ── */}
+        <section className="pb-12 space-y-3">
+          <HushhTechCta
+            variant={HushhTechCtaVariant.BLACK}
+            onClick={handleContinue}
+            disabled={!isValid || loading}
+          >
+            {loading ? "Saving..." : "Continue"}
+          </HushhTechCta>
+
+          <HushhTechCta
+            variant={HushhTechCtaVariant.WHITE}
+            onClick={handleSkip}
+          >
+            Skip
+          </HushhTechCta>
+        </section>
+
+        {/* ── Trust Badges ── */}
+        <section className="flex flex-col items-center justify-center text-center gap-2 pb-8">
+          <div className="flex items-center gap-1">
+            <span className="material-symbols-outlined text-[12px] text-gray-600">
+              lock
+            </span>
+            <span className="text-[10px] text-gray-600 tracking-wide uppercase font-medium">
+              256 bit encryption
+            </span>
+          </div>
+        </section>
       </main>
-
-      {/* ═══ Fixed Footer — Skip + Continue ═══ */}
-      {!isFooterVisible && (
-        <div
-          className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-200 px-4 py-4 z-40"
-          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
-          data-onboarding-footer
-        >
-          <div className="max-w-md mx-auto flex items-center gap-3">
-            <button
-              onClick={handleSkip}
-              className="flex-1 h-[50px] rounded-xl bg-gray-100 text-[#007AFF] font-semibold text-[17px] active:scale-[0.98] transition-transform flex items-center justify-center"
-            >
-              Skip
-            </button>
-            <button
-              onClick={handleContinue}
-              disabled={!isValid || loading}
-              data-onboarding-cta
-              className={`flex-[2] h-[50px] rounded-xl font-semibold text-[17px] shadow-sm active:scale-[0.98] transition-all flex items-center justify-center ${
-                isValid && !loading
-                  ? 'bg-[#007AFF] text-white shadow-lg shadow-blue-500/30'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {loading ? 'Saving...' : 'Continue'}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
