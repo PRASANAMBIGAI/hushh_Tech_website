@@ -10,7 +10,8 @@ interface DeleteAccountModalProps {
 }
 
 /**
- * iOS-native style Delete Account dialog.
+ * Delete Account Modal — Glassmorphism design matching Step 4 location modal.
+ * Playfair Display headings, black/white buttons, frosted overlay.
  * Backend logic is preserved — only UI is redesigned.
  */
 const DeleteAccountModal = ({
@@ -128,124 +129,115 @@ const DeleteAccountModal = ({
   if (!isOpen) return null;
 
   // =====================================================
-  // iOS Native Alert UI
+  // Glassmorphism Modal — Matches Step 4 location modal
   // =====================================================
   return (
-    <div
-      className="fixed inset-0 z-[2000] flex items-center justify-center px-6"
-      style={{ background: "rgba(0, 0, 0, 0.4)" }}
-      onClick={handleClose}
-    >
+    <>
+      {/* ── Frosted glass overlay ── */}
       <div
-        className="w-full max-w-[320px] bg-white rounded-[14px] overflow-hidden shadow-2xl"
-        style={{
-          fontFamily:
-            '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Content Area */}
-        <div className="px-5 pt-5 pb-4">
-          {/* Warning Icon + Title */}
-          <div className="flex items-center justify-center mb-2">
-            <span
-              className="material-symbols-outlined text-[#FF3B30] mr-2 text-[22px]"
-              style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}
+        className="fixed inset-0 z-40 bg-white/60 backdrop-blur-sm"
+        onClick={handleClose}
+      />
+
+      {/* ── Modal card — bottom-sheet on mobile, centered on desktop ── */}
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0">
+        <div
+          className="relative w-full max-w-sm bg-white rounded-3xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.08),0_0_1px_rgba(0,0,0,0.04)] p-8 flex flex-col items-center text-center border border-gray-100/50"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* ── Warning icon in circle ── */}
+          <div className="mb-8">
+            <div className="w-20 h-20 rounded-full border border-gray-200 bg-white flex items-center justify-center shadow-sm">
+              <span
+                className="material-symbols-outlined text-black text-[2rem]"
+                style={{ fontVariationSettings: "'wght' 200" }}
+              >
+                delete_forever
+              </span>
+            </div>
+          </div>
+
+          {/* ── Heading & description ── */}
+          <div className="space-y-4 mb-8 px-2">
+            <h2
+              className="text-[1.75rem] leading-[1.2] text-black lowercase tracking-tight"
+              style={{ fontFamily: "'Playfair Display', serif" }}
             >
-              warning
-            </span>
-            <h3 className="text-[17px] font-semibold text-black leading-tight">
-              {t("deleteAccount.title")}
-            </h3>
-          </div>
-
-          {/* Warning message */}
-          <p className="text-[13px] text-[#8E8E93] text-center leading-[1.5] mb-4">
-            {t("deleteAccount.warningMessage")}
-          </p>
-
-          {/* What will be deleted — iOS grouped card */}
-          <div className="bg-[#F2F2F7] rounded-[10px] px-4 py-3 mb-4">
-            <p className="text-[13px] font-medium text-black mb-2">
-              {t("deleteAccount.willDelete")}
+              are you sure?
+            </h2>
+            <p className="text-gray-500 text-[0.85rem] leading-relaxed font-normal lowercase max-w-[90%] mx-auto">
+              this action is permanent and cannot be undone. all your data,
+              investment info, and services will be removed.
             </p>
-            <ul className="space-y-1.5">
-              {[
-                t("deleteAccount.deleteItem1"),
-                t("deleteAccount.deleteItem2"),
-                t("deleteAccount.deleteItem3"),
-                t("deleteAccount.deleteItem4"),
-                "All your Hushh AI chats and conversations",
-                "All uploaded media files (images, documents)",
-                "Your AI chat history and preferences",
-              ].map((item, i) => (
-                <li
-                  key={i}
-                  className="text-[13px] text-[#8E8E93] leading-[1.4] flex items-start"
-                >
-                  <span className="text-[#8E8E93] mr-1.5 mt-0.5 shrink-0">•</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
           </div>
 
-          {/* Confirmation input */}
-          <p className="text-[13px] font-medium text-black mb-2">
-            {t("deleteAccount.confirmPrompt")}
-          </p>
-          <input
-            type="text"
-            value={confirmText}
-            onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
-            placeholder="DELETE"
-            className="w-full h-[44px] rounded-[10px] bg-[#F2F2F7] border border-[#E5E5EA] px-4 text-[15px] text-black font-mono tracking-[2px] placeholder:text-[#C7C7CC] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-        </div>
+          {/* ── Confirmation input ── */}
+          <div className="w-full mb-8">
+            <p className="text-xs text-gray-500 lowercase font-semibold mb-3 tracking-wide">
+              type DELETE to confirm
+            </p>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
+              placeholder="DELETE"
+              className="w-full h-[52px] border border-gray-200 bg-white px-4 text-sm text-black font-mono tracking-[2px] placeholder:text-gray-300 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-label="Type DELETE to confirm account deletion"
+            />
+          </div>
 
-        {/* iOS-style stacked action buttons with hairline separators */}
-        <div className="border-t border-[#C6C6C8]">
-          {/* Cancel Button — iOS style: bold, blue */}
-          <button
-            onClick={handleClose}
-            disabled={isDeleting}
-            className="w-full h-[44px] text-[17px] font-semibold text-[#007AFF] active:bg-[#E5E5EA] transition-colors disabled:opacity-50"
-          >
-            {t("deleteAccount.cancel")}
-          </button>
+          {/* ── Action buttons ── */}
+          <div className="w-full space-y-4">
+            {/* Delete — primary black */}
+            <button
+              onClick={handleDeleteAccount}
+              disabled={!isDeleteEnabled || isDeleting}
+              className="w-full h-12 bg-black text-white font-medium text-[0.8rem] flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-[0.99] border border-black hover:bg-black/90 disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none lowercase"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                  <span>deleting...</span>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="material-symbols-outlined text-lg"
+                    style={{ fontVariationSettings: "'wght' 400" }}
+                  >
+                    delete_forever
+                  </span>
+                  <span>delete my account</span>
+                </>
+              )}
+            </button>
 
-          {/* Hairline separator */}
-          <div className="h-[0.5px] bg-[#C6C6C8]" />
+            {/* Keep — outlined white */}
+            <button
+              onClick={handleClose}
+              disabled={isDeleting}
+              className="w-full h-12 border border-black bg-white text-black font-medium text-[0.8rem] hover:bg-gray-50 transition-colors active:scale-[0.99] disabled:opacity-50 lowercase"
+            >
+              keep my account
+            </button>
 
-          {/* Delete Button — iOS style: destructive red, regular weight */}
-          <button
-            onClick={handleDeleteAccount}
-            disabled={!isDeleteEnabled || isDeleting}
-            className="w-full h-[44px] text-[17px] font-normal text-[#FF3B30] active:bg-[#E5E5EA] transition-colors disabled:text-[#FF3B30]/30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isDeleting ? (
-              <>
-                <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
-                <span>{t("deleteAccount.deleting")}</span>
-              </>
-            ) : (
-              <>
-                <span
-                  className="material-symbols-outlined text-[18px]"
-                  style={{ fontVariationSettings: "'FILL' 1, 'wght' 400" }}
-                >
-                  delete
-                </span>
-                <span>{t("deleteAccount.confirmDelete")}</span>
-              </>
-            )}
-          </button>
+            {/* Cancel — text link */}
+            <div className="pt-2">
+              <button
+                onClick={handleClose}
+                disabled={isDeleting}
+                className="text-xs font-medium text-gray-400 hover:text-black transition-colors lowercase disabled:opacity-50"
+              >
+                cancel
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
