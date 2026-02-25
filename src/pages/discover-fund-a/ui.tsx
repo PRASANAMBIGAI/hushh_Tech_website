@@ -147,17 +147,12 @@ const FundA = () => {
           </div>
 
           <h1
-            className="text-[28px] leading-[1.15] font-medium text-black tracking-tight mb-1"
+            className="text-[2.75rem] leading-[1.1] font-normal text-black tracking-tight"
             style={{ fontFamily: "'Playfair Display', serif" }}
           >
-            {heroTitle}
+            {heroTitle} <br />
+            <span className="text-gray-400 italic font-light">{heroSubtitle}</span>
           </h1>
-          <h2
-            className="text-[32px] leading-[1.1] font-medium text-black tracking-tight"
-            style={{ fontFamily: "'Playfair Display', serif" }}
-          >
-            {heroSubtitle}
-          </h2>
 
           <p className="text-[13px] text-gray-400 font-light mt-4 leading-relaxed max-w-xs">
             {heroDescription}

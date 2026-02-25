@@ -51,11 +51,11 @@ export default function HomePage() {
             </span>
           </div>
           <h1
-            className="text-[2.25rem] leading-[1.15] font-medium text-black tracking-tight"
+            className="text-[2.75rem] leading-[1.1] font-normal text-black tracking-tight"
             style={playfair}
           >
             Investing in <br /> the{" "}
-            <span className="italic text-hushh-blue">Future.</span>
+            <span className="text-gray-400 italic font-light">Future.</span>
           </h1>
           <p className="text-gray-500 text-sm font-light mt-3 leading-relaxed max-w-sm">
             The world's first AI-powered Berkshire Hathaway. Merging rigorous
