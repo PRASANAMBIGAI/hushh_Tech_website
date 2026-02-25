@@ -6,6 +6,22 @@ export default {
   ],
   theme: {
     extend: {
+      colors: {
+        "hushh-blue": "#2563EB",
+        "hushh-text-muted": "#6B7280",
+      },
+      fontFamily: {
+        display: ['"Playfair Display"', 'serif'],
+        serif: ['"Playfair Display"', 'serif'],
+        sans: ['"Manrope"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
+      boxShadow: {
+        'soft': '0 8px 30px -4px rgba(0, 0, 0, 0.04)',
+      },
+      letterSpacing: {
+        'widest-xl': '0.2em',
+      },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'fadeIn': 'fadeIn 0.2s ease-out',

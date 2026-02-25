@@ -1,21 +1,5 @@
 import { useState } from "react";
-import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Button,
-  Text,
-  Input,
-  VStack,
-  HStack,
-  Icon,
-  useToast,
-  Spinner,
-} from "@chakra-ui/react";
-import { FiAlertTriangle, FiTrash2 } from "react-icons/fi";
+import { useToast } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
 import config from "../resources/config/config";
 
@@ -25,6 +9,11 @@ interface DeleteAccountModalProps {
   onAccountDeleted: () => void;
 }
 
+/**
+ * Delete Account Modal — Glassmorphism design matching Step 4 location modal.
+ * Playfair Display headings, black/white buttons, frosted overlay.
+ * Backend logic is preserved — only UI is redesigned.
+ */
 const DeleteAccountModal = ({
   isOpen,
   onClose,
@@ -37,6 +26,9 @@ const DeleteAccountModal = ({
 
   const isDeleteEnabled = confirmText.toUpperCase() === "DELETE";
 
+  // =====================================================
+  // Backend logic — UNCHANGED
+  // =====================================================
   const handleDeleteAccount = async () => {
     if (!isDeleteEnabled || !config.supabaseClient) return;
 
@@ -44,25 +36,24 @@ const DeleteAccountModal = ({
 
     try {
       console.log("[DeleteAccount] Starting account deletion process...");
-      
-      // Force refresh the session to get a fresh access token
-      // This is more reliable than getUser() + getSession() which can return stale tokens
-      const { data: refreshData, error: refreshError } = 
+
+      const { data: refreshData, error: refreshError } =
         await config.supabaseClient.auth.refreshSession();
-      
+
       let accessToken: string | null = null;
 
       if (refreshError) {
         console.error("[DeleteAccount] Session refresh failed:", refreshError);
-        // If refresh fails, try to get current session as fallback
-        const { data: { session: fallbackSession } } = 
-          await config.supabaseClient.auth.getSession();
-        
+        const {
+          data: { session: fallbackSession },
+        } = await config.supabaseClient.auth.getSession();
+
         if (!fallbackSession?.access_token) {
-          throw new Error("Session expired. Please log out and log in again to delete your account.");
+          throw new Error(
+            "Session expired. Please log out and log in again to delete your account."
+          );
         }
-        
-        // Use fallback session
+
         console.log("[DeleteAccount] Using fallback session...");
         accessToken = fallbackSession.access_token;
       } else if (refreshData.session?.access_token) {
@@ -70,10 +61,11 @@ const DeleteAccountModal = ({
         accessToken = refreshData.session.access_token;
       } else {
         console.error("[DeleteAccount] No session after refresh");
-        throw new Error("Unable to verify your session. Please log out and log in again.");
+        throw new Error(
+          "Unable to verify your session. Please log out and log in again."
+        );
       }
 
-      // Call the edge function to delete account
       console.log("[DeleteAccount] Calling delete endpoint...");
       const supabaseUrl = config.SUPABASE_URL;
       const response = await fetch(
@@ -96,14 +88,12 @@ const DeleteAccountModal = ({
 
       console.log("[DeleteAccount] Account deleted successfully");
 
-      // Set flag BEFORE clearing storage to prevent welcome toast in Navbar
       localStorage.setItem("accountJustDeleted", "true");
-      
-      // Clear other local storage items but keep the flag
-      const keysToRemove = Object.keys(localStorage).filter(key => key !== "accountJustDeleted");
-      keysToRemove.forEach(key => localStorage.removeItem(key));
+      const keysToRemove = Object.keys(localStorage).filter(
+        (key) => key !== "accountJustDeleted"
+      );
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
 
-      // Sign out from Supabase to clear the session
       await config.supabaseClient.auth.signOut();
 
       toast({
@@ -114,7 +104,6 @@ const DeleteAccountModal = ({
         isClosable: true,
       });
 
-      // Notify parent component (after a small delay to ensure toast is visible)
       setTimeout(() => {
         onAccountDeleted();
       }, 500);
@@ -137,150 +126,118 @@ const DeleteAccountModal = ({
     onClose();
   };
 
+  if (!isOpen) return null;
+
+  // =====================================================
+  // Glassmorphism Modal — Matches Step 4 location modal
+  // =====================================================
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} isCentered size="md">
-      <ModalOverlay bg="rgba(0, 0, 0, 0.5)" />
-      <ModalContent
-        bg="white"
-        borderRadius="16px"
-        mx={4}
-        boxShadow="0 25px 50px -12px rgba(0, 0, 0, 0.25)"
-      >
-        <ModalHeader
-          pt={6}
-          pb={0}
-          px={6}
-          display="flex"
-          alignItems="center"
-          gap={3}
+    <>
+      {/* ── Frosted glass overlay ── */}
+      <div
+        className="fixed inset-0 z-40 bg-white/60 backdrop-blur-sm"
+        onClick={handleClose}
+      />
+
+      {/* ── Modal card — bottom-sheet on mobile, centered on desktop ── */}
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0">
+        <div
+          className="relative w-full max-w-sm bg-white rounded-3xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.08),0_0_1px_rgba(0,0,0,0.04)] p-8 flex flex-col items-center text-center border border-gray-100/50"
+          onClick={(e) => e.stopPropagation()}
         >
-          <Icon as={FiAlertTriangle} color="#DC2626" boxSize={6} />
-          <Text fontSize="xl" fontWeight="600" color="#1F2937">
-            {t("deleteAccount.title")}
-          </Text>
-        </ModalHeader>
+          {/* ── Warning icon in circle ── */}
+          <div className="mb-8">
+            <div className="w-20 h-20 rounded-full border border-gray-200 bg-white flex items-center justify-center shadow-sm">
+              <span
+                className="material-symbols-outlined text-black text-[2rem]"
+                style={{ fontVariationSettings: "'wght' 200" }}
+              >
+                delete_forever
+              </span>
+            </div>
+          </div>
 
-        <ModalBody px={6} py={5}>
-          <VStack spacing={4} align="stretch">
-            {/* Warning message */}
-            <Text fontSize="md" color="#4B5563" lineHeight="1.6">
-              {t("deleteAccount.warningMessage")}
-            </Text>
-
-            {/* List of what will be deleted */}
-            <VStack
-              align="stretch"
-              spacing={2}
-              bg="#F9FAFB"
-              p={4}
-              borderRadius="12px"
-              border="1px solid #E5E7EB"
+          {/* ── Heading & description ── */}
+          <div className="space-y-4 mb-8 px-2">
+            <h2
+              className="text-[1.75rem] leading-[1.2] text-black lowercase tracking-tight"
+              style={{ fontFamily: "'Playfair Display', serif" }}
             >
-              <Text fontSize="sm" fontWeight="500" color="#374151">
-                {t("deleteAccount.willDelete")}
-              </Text>
-              <Text fontSize="sm" color="#6B7280">
-                • {t("deleteAccount.deleteItem1")}
-              </Text>
-              <Text fontSize="sm" color="#6B7280">
-                • {t("deleteAccount.deleteItem2")}
-              </Text>
-              <Text fontSize="sm" color="#6B7280">
-                • {t("deleteAccount.deleteItem3")}
-              </Text>
-              <Text fontSize="sm" color="#6B7280">
-                • {t("deleteAccount.deleteItem4")}
-              </Text>
-              <Text fontSize="sm" color="#6B7280">
-                • All your Hushh AI chats and conversations
-              </Text>
-              <Text fontSize="sm" color="#6B7280">
-                • All uploaded media files (images, documents)
-              </Text>
-              <Text fontSize="sm" color="#6B7280">
-                • Your AI chat history and preferences
-              </Text>
-            </VStack>
+              are you sure?
+            </h2>
+            <p className="text-gray-500 text-[0.85rem] leading-relaxed font-normal lowercase max-w-[90%] mx-auto">
+              this action is permanent and cannot be undone. all your data,
+              investment info, and services will be removed.
+            </p>
+          </div>
 
-            {/* Confirmation input */}
-            <VStack align="stretch" spacing={2}>
-              <Text fontSize="sm" fontWeight="500" color="#374151">
-                {t("deleteAccount.confirmPrompt")}
-              </Text>
-              <Input
-                value={confirmText}
-                onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
-                placeholder="DELETE"
-                size="lg"
-                bg="white"
-                border="2px solid #E5E7EB"
-                borderRadius="12px"
-                _focus={{
-                  borderColor: confirmText.toUpperCase() === "DELETE" ? "#DC2626" : "#6B7280",
-                  boxShadow: "none",
-                }}
-                _placeholder={{ color: "#9CA3AF" }}
-                color="#1F2937"
-                fontFamily="monospace"
-                letterSpacing="2px"
-              />
-            </VStack>
-          </VStack>
-        </ModalBody>
+          {/* ── Confirmation input ── */}
+          <div className="w-full mb-8">
+            <p className="text-xs text-gray-500 lowercase font-semibold mb-3 tracking-wide">
+              type DELETE to confirm
+            </p>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
+              placeholder="DELETE"
+              className="w-full h-[52px] border border-gray-200 bg-white px-4 text-sm text-black font-mono tracking-[2px] placeholder:text-gray-300 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-label="Type DELETE to confirm account deletion"
+            />
+          </div>
 
-        <ModalFooter px={6} pb={6} pt={0}>
-          <HStack spacing={3} w="full">
-            {/* Cancel button */}
-            <Button
-              flex={1}
-              onClick={handleClose}
-              bg="white"
-              color="#374151"
-              border="1px solid #D1D5DB"
-              borderRadius="12px"
-              height="48px"
-              fontSize="md"
-              fontWeight="500"
-              _hover={{ bg: "#F9FAFB" }}
-              _active={{ bg: "#F3F4F6" }}
-              isDisabled={isDeleting}
-            >
-              {t("deleteAccount.cancel")}
-            </Button>
-
-            {/* Delete button */}
-            <Button
-              flex={1}
+          {/* ── Action buttons ── */}
+          <div className="w-full space-y-4">
+            {/* Delete — primary black */}
+            <button
               onClick={handleDeleteAccount}
-              bg="#DC2626"
-              color="white"
-              borderRadius="12px"
-              height="48px"
-              fontSize="md"
-              fontWeight="500"
-              leftIcon={
-                isDeleting ? (
-                  <Spinner size="sm" />
-                ) : (
-                  <Icon as={FiTrash2} boxSize={4} />
-                )
-              }
-              _hover={{ bg: "#B91C1C" }}
-              _active={{ bg: "#991B1B" }}
-              _disabled={{
-                bg: "#FCA5A5",
-                cursor: "not-allowed",
-              }}
-              isDisabled={!isDeleteEnabled || isDeleting}
+              disabled={!isDeleteEnabled || isDeleting}
+              className="w-full h-12 bg-black text-white font-medium text-[0.8rem] flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-[0.99] border border-black hover:bg-black/90 disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none lowercase"
             >
-              {isDeleting
-                ? t("deleteAccount.deleting")
-                : t("deleteAccount.confirmDelete")}
-            </Button>
-          </HStack>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+              {isDeleting ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                  <span>deleting...</span>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="material-symbols-outlined text-lg"
+                    style={{ fontVariationSettings: "'wght' 400" }}
+                  >
+                    delete_forever
+                  </span>
+                  <span>delete my account</span>
+                </>
+              )}
+            </button>
+
+            {/* Keep — outlined white */}
+            <button
+              onClick={handleClose}
+              disabled={isDeleting}
+              className="w-full h-12 border border-black bg-white text-black font-medium text-[0.8rem] hover:bg-gray-50 transition-colors active:scale-[0.99] disabled:opacity-50 lowercase"
+            >
+              keep my account
+            </button>
+
+            {/* Cancel — text link */}
+            <div className="pt-2">
+              <button
+                onClick={handleClose}
+                disabled={isDeleting}
+                className="text-xs font-medium text-gray-400 hover:text-black transition-colors lowercase disabled:opacity-50"
+              >
+                cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
 

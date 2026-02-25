@@ -1,11 +1,11 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
-import Hero from './components/Hero';
+import HomePage from './pages/home/ui';
 import Leadership from './components/Leadership';
 import Philosophy from './components/Philosophy';
 import Footer from './components/Footer';
-import Login from './pages/Login'
+import LoginPage from './pages/login/ui'
 import Contact from './pages/Contact';
 import ScrollToTop from './components/ScrollToTop';
 import OnboardingShellAutoPadding from './components/OnboardingShellAutoPadding';
@@ -14,12 +14,15 @@ import { ChakraProvider } from '@chakra-ui/react';
 import theme from './theme';
 import Consumers from './pages/services/consumers';
 import Business from './pages/services/business';
-import Signup from './pages/Signup';
+import SignupPage from './pages/signup/ui';
 import Faq from './pages/faq';
 import Career from './pages/career';
-// import Community from './pages/community';
-import CommunityList from './pages/community/communityList';
-import CommunityPost from './pages/community/communityPost';
+// import Community from './pages/community'; // OLD monolithic
+// Old monolithic community (kept as backup):
+// import CommunityList from './pages/community/communityList';
+// import CommunityPost from './pages/community/communityPost';
+import CommunityPage from './pages/community/ui';
+import CommunityPostPage from './pages/community/post-ui';
 import ReportDetailPage from './pages/reports/reportDetail';
 import BenefitsPage from './pages/benefits';
 import PrivacyPolicy from './pages/privacy-policy';
@@ -51,19 +54,20 @@ import PrivacyControlsPage from './pages/hushh-user-profile/privacy';
 import PublicHushhProfilePage from './pages/hushhid';
 import PublicInvestorProfilePage from './pages/investor/PublicInvestorProfile';
 import HushhIDHeroDemo from './pages/hushhid-hero-demo';
-import FinancialLinkPage from './pages/onboarding/FinancialLink';
-import OnboardingStep1 from './pages/onboarding/Step1';
-import OnboardingStep2 from './pages/onboarding/Step2';
-import OnboardingStep4 from './pages/onboarding/Step4';
-import OnboardingStep5 from './pages/onboarding/Step5';
-import OnboardingStep7 from './pages/onboarding/Step7';
-import OnboardingStep8 from './pages/onboarding/Step8';
-import OnboardingStep9 from './pages/onboarding/Step9';
-import OnboardingStep11 from './pages/onboarding/Step11';
-import OnboardingStep13 from './pages/onboarding/Step13';
-import VerifyIdentityPage from './pages/onboarding/VerifyIdentity';
-import VerifyCompletePage from './pages/onboarding/VerifyComplete';
-import MeetCeoPage from './pages/onboarding/MeetCeo';
+import FinancialLinkPage from './pages/onboarding/financial-link/ui';
+import OnboardingStep1 from './pages/onboarding/step-1/ui';
+import OnboardingStep2 from './pages/onboarding/step-2/ui';
+import OnboardingStep3 from './pages/onboarding/step-3/ui';
+import OnboardingStep4 from './pages/onboarding/step-4/ui';
+import OnboardingStep5 from './pages/onboarding/step-5/ui';
+import OnboardingStep7 from './pages/onboarding/step-7/ui';
+import OnboardingStep8 from './pages/onboarding/step-8/ui';
+import OnboardingStep9 from './pages/onboarding/step-9/ui';
+import OnboardingStep11 from './pages/onboarding/step-11/ui';
+import OnboardingStep13 from './pages/onboarding/step-13/ui';
+import VerifyIdentityPage from './pages/onboarding/verify-identity/ui';
+import VerifyCompletePage from './pages/onboarding/verify-complete/ui';
+import MeetCeoPage from './pages/onboarding/meet-ceo/ui';
 import InvestorGuidePage from './pages/onboarding/InvestorGuide';
 import KYCDemoPage from './pages/kyc-demo';
 import KycFlowPage from './pages/kyc-flow';
@@ -102,9 +106,14 @@ const ContentWrapper = ({ children }: { children: ReactNode }) => {
   const isHushhUserProfile = location.pathname.startsWith('/hushh-user-profile');
   const isSignNda = location.pathname.startsWith('/sign-nda');
   const isInvestorProfile = location.pathname.startsWith('/investor-profile');
+  const isDiscoverFundA = location.pathname === '/discover-fund-a';
+  const isCommunity = location.pathname.startsWith('/community');
+  const isDeleteAccount = location.pathname === '/delete-account';
+  const isLogin = location.pathname.toLowerCase() === '/login';
+  const isSignup = location.pathname.toLowerCase() === '/signup';
 
   return (
-    <div className={`${isHomePage || isAuthCallback || isUserRegistration || isOnboarding || isKycFlow || isA2APlayground || isInvestorGuide || isHushhAI || isHushhAgent || isKai || isStudio || isHushhUserProfile || isSignNda || isInvestorProfile ? '' : 'mt-20'}`}>
+    <div className={`${isHomePage || isAuthCallback || isUserRegistration || isOnboarding || isKycFlow || isA2APlayground || isInvestorGuide || isHushhAI || isHushhAgent || isKai || isStudio || isHushhUserProfile || isSignNda || isInvestorProfile || isDiscoverFundA || isCommunity || isDeleteAccount || isLogin || isSignup ? '' : 'mt-20'}`}>
       {children}
     </div>
   );
@@ -113,18 +122,25 @@ const ContentWrapper = ({ children }: { children: ReactNode }) => {
 // Layout visibility hook - determines which components to show based on route
 const useLayoutVisibility = () => {
   const location = useLocation();
+  const isHomePage = location.pathname === '/';
   const isHushhAI = location.pathname.startsWith('/hushh-ai');
   const isHushhAgent = location.pathname.startsWith('/hushh-agent');
   const isKai = location.pathname.startsWith('/kai');
   const isStudio = location.pathname.startsWith('/studio');
   const isOnboarding = location.pathname.startsWith('/onboarding');
+  const isProfile = location.pathname === '/profile';
+  const isFundA = location.pathname === '/discover-fund-a';
+  const isCommunity = location.pathname.startsWith('/community');
+  const isDeleteAccount = location.pathname === '/delete-account';
+  const isLogin = location.pathname.toLowerCase() === '/login';
+  const isSignup = location.pathname.toLowerCase() === '/signup';
 
+  // Home + Onboarding + Profile + Fund A + Community + Delete Account + Login + Signup use HushhTechHeader/Footer — hide old global nav/footer
+  const hideOld = isHushhAI || isHushhAgent || isKai || isStudio || isHomePage || isOnboarding || isProfile || isFundA || isCommunity || isDeleteAccount || isLogin || isSignup;
   return {
-    // Onboarding is an immersive flow with its own in-shell header/back UX.
-    // Hiding the global navbar avoids double headers and fixes mobile viewport sizing.
-    showNavbar: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isOnboarding,
-    showFooter: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isOnboarding,
-    showMobileNav: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isOnboarding,
+    showNavbar: !hideOld,
+    showFooter: !hideOld,
+    showMobileNav: !hideOld,
   };
 };
 
@@ -199,15 +215,15 @@ function App() {
         {/* {session && <NDAPopup />} */}
         <ContentWrapper>
           <Routes>
-            <Route path="/" element={<Hero />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/about/leadership" element={<Leadership />} />
             <Route path="/about/philosophy" element={<Philosophy />} />
-            <Route path="/Login" element={<Login />} />
+            <Route path="/Login" element={<LoginPage />} />
             <Route path="/Contact" element={<Contact />} />
             <Route path="/benefits" element={<BenefitsPage />} />
             <Route path='/services/consumers' element={<Consumers />} />
             <Route path='/services/business' element={<Business />} />
-            <Route path='/Signup' element={<Signup />} />
+            <Route path='/Signup' element={<SignupPage />} />
             <Route path='/faq' element={<Faq />} />
             <Route path='/profile' element={
               <Profile />
@@ -217,15 +233,13 @@ function App() {
             <Route path='/privacy-policy' element={<PrivacyPolicy />} />
             <Route path='/carrer-privacy-policy' element={<CareersPrivacyPolicy />} />
             <Route path="/community" element={
-              <CommunityList />
+              <CommunityPage />
             } />
             <Route path='/california-privacy-policy' element={<CaliforniaPrivacyPolicy />} />
             <Route path='/eu-uk-jobs-privacy-policy' element={<EUUKPrivacyPolicy />} />
             <Route path='/delete-account' element={<DeleteAccountPage />} />
             <Route path="/community/*" element={
-
-              <CommunityPost />
-
+              <CommunityPostPage />
             } />
             <Route path="/reports/:id" element={
 
@@ -253,7 +267,7 @@ function App() {
             } />
             <Route path="/onboarding/step-3" element={
               <ProtectedRoute>
-                <Navigate to="/onboarding/step-4" replace />
+                <OnboardingStep3 />
               </ProtectedRoute>
             } />
             <Route path="/onboarding/step-4" element={

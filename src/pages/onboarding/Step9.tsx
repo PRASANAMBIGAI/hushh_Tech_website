@@ -1,431 +1,383 @@
+/**
+ * Step 9 - SSN + Date of Birth (iOS-native design)
+ *
+ * Collects Social Security Number (optional) and Date of Birth (required).
+ */
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import config from '../../resources/config/config';
 import { upsertOnboardingData } from '../../services/onboarding/upsertOnboardingData';
 import { useFooterVisibility } from '../../utils/useFooterVisibility';
 
-// Back arrow icon (same as Step3)
-const BackIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-);
+/* ═══════════════════════════════════════════════
+   CONSTANTS
+   ═══════════════════════════════════════════════ */
 
-// Lock icon
-const LockIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
+const DISPLAY_STEP = 8;
+const TOTAL_STEPS = 12;
+const PROGRESS_PCT = Math.round((DISPLAY_STEP / TOTAL_STEPS) * 100);
 
-// Calendar icon
-const CalendarIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
-);
+/* ═══════════════════════════════════════════════
+   COMPONENT
+   ═══════════════════════════════════════════════ */
 
-// Info icon
-const InfoIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="16" x2="12" y2="12" />
-    <line x1="12" y1="8" x2="12.01" y2="8" />
-  </svg>
-);
-
-// Chevron down icon
-const ChevronDownIcon = ({ className }: { className?: string }) => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polyline points="6,9 12,15 18,9" />
-  </svg>
-);
-
-function OnboardingStep9() {
+export default function OnboardingStep9() {
   const navigate = useNavigate();
   const isFooterVisible = useFooterVisibility();
   const [ssn, setSsn] = useState('');
   const [dob, setDob] = useState('');
+  const [dobMonth, setDobMonth] = useState('');
+  const [dobDay, setDobDay] = useState('');
+  const [dobYear, setDobYear] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
-  
-  // Ref for native date picker
   const dateInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+
+  /* ─── Helpers ─── */
   const formatIsoToDisplay = (iso?: string | null) => {
     if (!iso) return '';
     const parts = iso.split('-');
-    if (parts.length === 3) {
-      const [yyyy, mm, dd] = parts;
-      return `${mm}/${dd}/${yyyy}`;
-    }
+    if (parts.length === 3) return `${parts[1]}/${parts[2]}/${parts[0]}`;
     return iso;
   };
 
   const parseDobToIso = (value: string) => {
     if (!value) return null;
-
     const parts = value.split('/');
     if (parts.length === 3) {
       let [p1, p2, year] = parts.map((p) => p.trim());
-      let month = p1;
-      let day = p2;
-
-      if (parseInt(p1, 10) > 12) {
-        day = p1;
-        month = p2;
-      }
-
+      let month = p1, day = p2;
+      if (parseInt(p1, 10) > 12) { day = p1; month = p2; }
       const iso = `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      if (!Number.isNaN(Date.parse(iso))) {
-        return iso;
-      }
+      if (!Number.isNaN(Date.parse(iso))) return iso;
     }
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value))) {
-      return value;
-    }
-
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value))) return value;
     return null;
   };
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
+  /* ─── Load saved data ─── */
   useEffect(() => {
     const loadData = async () => {
       if (!config.supabaseClient) return;
-
       const { data: { user } } = await config.supabaseClient.auth.getUser();
       if (!user) return;
 
-      // Fetch existing data
       const { data } = await config.supabaseClient
         .from('onboarding_data')
         .select('ssn_encrypted, date_of_birth')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      // Restore saved DOB and SSN when user returns to this step
       if (data?.date_of_birth) {
-        const savedDob = formatIsoToDisplay(data.date_of_birth);
-        if (savedDob) {
-          setDob(savedDob);
-          console.log('[Step11] âœ… Restored saved DOB:', savedDob);
+        const saved = formatIsoToDisplay(data.date_of_birth);
+        if (saved) setDob(saved);
+        // Also populate dropdowns from ISO date
+        const parts = data.date_of_birth.split('-');
+        if (parts.length === 3) {
+          setDobYear(parts[0]);
+          setDobMonth(parts[1]);
+          setDobDay(parts[2]);
         }
       }
       if (data?.ssn_encrypted && data.ssn_encrypted !== '999-99-9999') {
         setSsn(data.ssn_encrypted);
-        console.log('[Step11] âœ… Restored saved SSN');
       }
     };
-
     loadData();
   }, []);
 
-  const formatSSN = (value: string) => {
-    const cleaned = value.replace(/\D/g, '');
-    if (cleaned.length <= 3) return cleaned;
-    if (cleaned.length <= 5) return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
-    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 5)}-${cleaned.slice(5, 9)}`;
+  /* ─── Formatters ─── */
+  const formatSSN = (v: string) => {
+    const d = v.replace(/\D/g, '');
+    if (d.length <= 3) return d;
+    if (d.length <= 5) return `${d.slice(0, 3)}-${d.slice(3)}`;
+    return `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5, 9)}`;
   };
 
-  const handleSSNChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatSSN(e.target.value);
-    setSsn(formatted);
+  const formatDate = (v: string) => {
+    const d = v.replace(/\D/g, '');
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+    return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4, 8)}`;
   };
 
-  const formatDate = (value: string) => {
-    const cleaned = value.replace(/\D/g, '');
-    if (cleaned.length <= 2) return cleaned;
-    if (cleaned.length <= 4) return `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
-    return `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
-  };
+  const handleSSNChange = (e: React.ChangeEvent<HTMLInputElement>) => setSsn(formatSSN(e.target.value));
+  const handleDobChange = (e: React.ChangeEvent<HTMLInputElement>) => setDob(formatDate(e.target.value));
 
-  const handleDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatDate(e.target.value);
-    setDob(formatted);
-  };
-
-  // Handle native date picker selection
   const handleNativeDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const isoDate = e.target.value; // Format: YYYY-MM-DD
-    if (isoDate) {
-      const displayDate = formatIsoToDisplay(isoDate);
-      setDob(displayDate);
-    }
+    if (e.target.value) setDob(formatIsoToDisplay(e.target.value));
   };
 
-  // Open native date picker when calendar icon is clicked
   const openDatePicker = () => {
     if (dateInputRef.current) {
-      dateInputRef.current.showPicker?.(); // Modern browsers
-      dateInputRef.current.click(); // Fallback
+      dateInputRef.current.showPicker?.();
+      dateInputRef.current.click();
     }
   };
 
-  // SSN is OPTIONAL - user can continue with just DOB
-  const isFormValid = dob.length === 10;  // Only DOB is required
-  const canSkip = dob.length === 10;  // Can skip SSN if DOB is filled
+  // Sync dob string from dropdown selections
+  useEffect(() => {
+    if (dobMonth && dobDay && dobYear) {
+      setDob(`${dobMonth}/${dobDay}/${dobYear}`);
+    }
+  }, [dobMonth, dobDay, dobYear]);
 
+  // Generate year options (current year down to 1930)
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: currentYear - 1929 }, (_, i) => String(currentYear - i));
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  
+  // Days in selected month/year
+  const daysInMonth = dobMonth && dobYear
+    ? new Date(parseInt(dobYear), parseInt(dobMonth), 0).getDate()
+    : 31;
+  const dayOptions = Array.from({ length: daysInMonth }, (_, i) => String(i + 1).padStart(2, '0'));
+
+  // Correct day if month changed and day is now out of range
+  useEffect(() => {
+    if (dobDay && parseInt(dobDay) > daysInMonth) {
+      setDobDay(String(daysInMonth).padStart(2, '0'));
+    }
+  }, [dobMonth, dobYear, daysInMonth, dobDay]);
+
+  const isFormValid = !!(dobMonth && dobDay && dobYear && dobYear.length === 4);
+
+  /* ─── Handlers ─── */
   const handleContinue = async () => {
-    if (!isFormValid) {
-      setError('Please fill in all required fields');
-      return;
-    }
+    if (!isFormValid) { setError('Please enter your date of birth'); return; }
+    setLoading(true); setError(null);
 
-    setLoading(true);
-    setError(null);
-
-    if (!config.supabaseClient) {
-      setError('Configuration error');
-      setLoading(false);
-      return;
-    }
-
+    if (!config.supabaseClient) { setError('Configuration error'); setLoading(false); return; }
     const { data: { user } } = await config.supabaseClient.auth.getUser();
-    if (!user) {
-      setError('Not authenticated');
-      setLoading(false);
-      return;
-    }
+    if (!user) { setError('Not authenticated'); setLoading(false); return; }
 
     const isoDob = parseDobToIso(dob);
-    if (!isoDob) {
-      setError('Please enter a valid date in MM/DD/YYYY or DD/MM/YYYY format');
-      setLoading(false);
-      return;
-    }
+    if (!isoDob) { setError('Please enter a valid date (MM/DD/YYYY)'); setLoading(false); return; }
 
-    const { error: upsertError } = await upsertOnboardingData(user.id, {
-      ssn_encrypted: ssn,
-      date_of_birth: isoDob,
-      current_step: 9,
+    const { error: e } = await upsertOnboardingData(user.id, {
+      ssn_encrypted: ssn, date_of_birth: isoDob, current_step: 9,
     });
-
-    if (upsertError) {
-      setError('Failed to save data');
-      setLoading(false);
-      return;
-    }
-
+    if (e) { setError('Failed to save data'); setLoading(false); return; }
     navigate('/onboarding/step-11');
   };
 
   const handleSkip = async () => {
-    if (!canSkip) {
-      setError('Please enter your date of birth before skipping');
-      return;
-    }
+    if (!isFormValid) { setError('Please enter your date of birth before skipping'); return; }
+    setLoading(true); setError(null);
 
-    setLoading(true);
-    setError(null);
-
-    if (!config.supabaseClient) {
-      setError('Configuration error');
-      setLoading(false);
-      return;
-    }
-
+    if (!config.supabaseClient) { setError('Configuration error'); setLoading(false); return; }
     const { data: { user } } = await config.supabaseClient.auth.getUser();
-    if (!user) {
-      setError('Not authenticated');
-      setLoading(false);
-      return;
-    }
+    if (!user) { setError('Not authenticated'); setLoading(false); return; }
 
     const isoDob = parseDobToIso(dob);
-    if (!isoDob) {
-      setError('Please enter a valid date in MM/DD/YYYY or DD/MM/YYYY format');
-      setLoading(false);
-      return;
-    }
+    if (!isoDob) { setError('Please enter a valid date (MM/DD/YYYY)'); setLoading(false); return; }
 
-    const { error: upsertError } = await upsertOnboardingData(user.id, {
-      ssn_encrypted: '999-99-9999',
-      date_of_birth: isoDob,
-      current_step: 9,
+    const { error: e } = await upsertOnboardingData(user.id, {
+      ssn_encrypted: '999-99-9999', date_of_birth: isoDob, current_step: 9,
     });
-
-    if (upsertError) {
-      setError('Failed to save data');
-      setLoading(false);
-      return;
-    }
-
+    if (e) { setError('Failed to save data'); setLoading(false); return; }
     navigate('/onboarding/step-11');
   };
 
-  const handleBack = () => {
-    navigate('/onboarding/step-8');
-  };
+  const handleBack = () => navigate('/onboarding/step-8');
 
+  /* ═══════════════════════════════════════════════
+     RENDER
+     ═══════════════════════════════════════════════ */
   return (
-    <div 
-      className="bg-slate-50 min-h-screen"
-      style={{ fontFamily: "'Manrope', sans-serif" }}
+    <div
+      className="bg-white min-h-[100dvh] flex flex-col"
+      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif", WebkitFontSmoothing: 'antialiased' }}
     >
-      <div className="onboarding-shell relative flex min-h-screen w-full flex-col bg-white max-w-[500px] mx-auto shadow-xl overflow-hidden border-x border-slate-100">
-        
-        {/* Sticky Header */}
-        <header className="flex items-center px-4 pt-4 pb-2 bg-white sticky top-0 z-10">
-          <button 
-            onClick={handleBack}
-            aria-label="Go back"
-            className="flex size-10 shrink-0 items-center justify-center text-slate-900 rounded-full hover:bg-slate-50 transition-colors"
-          >
-            <BackIcon />
-          </button>
-        </header>
+      {/* ═══ iOS Navigation Bar ═══ */}
+      <nav
+        className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#C6C6C8]/30 flex items-end justify-between px-4 pb-2"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 12px) + 4px)', minHeight: '48px' }}
+      >
+        <button onClick={handleBack} className="text-[#007AFF] flex items-center -ml-2 active:opacity-50 transition-opacity" aria-label="Go back">
+          <span className="material-symbols-outlined text-3xl -mr-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>chevron_left</span>
+          <span className="text-[17px] leading-none pb-[2px]">Back</span>
+        </button>
+        <span className="font-semibold text-[17px] text-black">Setup</span>
+        <button onClick={handleSkip} className="text-[17px] text-[#007AFF] font-normal active:opacity-50 transition-opacity">Skip</button>
+      </nav>
 
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col px-4 sm:px-6 pb-40 sm:pb-44">
-          {/* Header Section - 22px title, 14px subtitle, center aligned */}
-          <div className="mb-8 mt-2 flex flex-col items-center text-center">
-            <h1 className="text-slate-900 text-[22px] font-extrabold leading-tight tracking-tight mb-2">
-              We just need a few more details
-            </h1>
-            <p className="text-slate-500 text-sm font-bold">
-              Federal law requires us to collect this info for tax reporting.
-            </p>
+      <main className="flex-1 overflow-y-auto max-w-md mx-auto w-full px-4 pb-48">
+        {/* ─── Progress Bar ─── */}
+        <div className="mt-6 mb-8">
+          <div className="flex justify-between items-end mb-2">
+            <span className="text-[13px] font-medium text-[#8E8E93] uppercase tracking-wide">Onboarding Progress</span>
+            <span className="text-[13px] text-[#8E8E93]">Step {DISPLAY_STEP} of {TOTAL_STEPS}</span>
           </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* SSN Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-            <label className="flex flex-col w-full">
-              <p className="text-slate-900 text-sm font-semibold leading-normal pb-2">Social Security number</p>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={ssn}
-                  onChange={handleSSNChange}
-                  placeholder="000-00-0000"
-                  maxLength={11}
-                  inputMode="numeric"
-                  className="flex w-full rounded-lg text-slate-900 border border-slate-200 bg-white h-12 px-4 pr-10 text-base font-medium placeholder:text-slate-400 focus:outline-0 focus:ring-2 focus:ring-[#2b8cee]/20 focus:border-[#2b8cee] transition-all"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <LockIcon />
-                </span>
-              </div>
-            </label>
-            
-            {/* Accordion for SSN info */}
-            <div className="mt-4 border-t border-slate-100 pt-3">
-              <details 
-                className="group"
-                open={showInfo}
-                onToggle={(e) => setShowInfo((e.target as HTMLDetailsElement).open)}
-              >
-                <summary className="flex cursor-pointer items-center gap-2 py-1 text-[#2b8cee] hover:text-[#2b8cee]/80 transition-colors list-none select-none">
-                  <InfoIcon />
-                  <span className="text-sm font-bold">Why do we need your SSN?</span>
-                  <ChevronDownIcon className="ml-auto transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="pt-3 pb-1">
-                  <p className="text-slate-500 text-sm font-medium leading-relaxed">
-                    We are required by federal law to collect this information to prevent fraud and verify your identity before opening an investment account.
-                  </p>
-                </div>
-              </details>
-            </div>
+          <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full bg-[#007AFF] rounded-full transition-all duration-500" style={{ width: `${PROGRESS_PCT}%` }} />
           </div>
+          <p className="mt-1.5 text-[13px] font-medium text-[#007AFF]">{PROGRESS_PCT}% complete</p>
+        </div>
 
-          {/* DOB Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-            <label className="flex flex-col w-full">
-              <p className="text-slate-900 text-sm font-semibold leading-normal pb-2">Date of birth</p>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={dob}
-                  onChange={handleDobChange}
-                  placeholder="MM/DD/YYYY"
-                  maxLength={10}
-                  inputMode="numeric"
-                  className="flex w-full rounded-lg text-slate-900 border border-slate-200 bg-white h-12 px-4 pr-10 text-base font-medium placeholder:text-slate-400 focus:outline-0 focus:ring-2 focus:ring-[#2b8cee]/20 focus:border-[#2b8cee] transition-all"
-                />
-                {/* Clickable Calendar Icon */}
-                <button 
-                  type="button"
-                  onClick={openDatePicker}
-                  aria-label="Open date picker"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer hover:opacity-70 transition-opacity p-1"
-                >
-                  <CalendarIcon />
-                </button>
-                {/* Hidden native date input */}
-                <input
-                  ref={dateInputRef}
-                  type="date"
-                  onChange={handleNativeDateChange}
-                  className="sr-only"
-                  aria-hidden="true"
-                  tabIndex={-1}
-                  max={new Date().toISOString().split('T')[0]}
-                  min="1900-01-01"
-                />
-              </div>
-            </label>
-          </div>
-        </main>
+        {/* ─── Title ─── */}
+        <div className="mb-8">
+          <h1 className="text-[34px] leading-tight font-bold text-black tracking-tight mb-3">
+            We just need a few more details
+          </h1>
+          <p className="text-[17px] leading-snug text-[#8E8E93]">
+            Federal law requires us to collect this info for tax reporting.
+          </p>
+        </div>
 
-        {/* Fixed Footer - Hidden when main footer is visible (matching Step3 exactly) */}
-        {!isFooterVisible && (
-          <div
-            className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-[500px] mx-auto border-t border-slate-100 bg-white/90 backdrop-blur-md px-4 sm:px-6 pt-4 sm:pt-5 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-[0_-4px_20px_rgba(0,0,0,0.04)]"
-            data-onboarding-footer
-          >
-            {/* Buttons */}
-            <div className="flex flex-col gap-3 sm:gap-4">
-              {/* Continue Button */}
-              <button
-                onClick={handleContinue}
-                disabled={!isFormValid || loading}
-                data-onboarding-cta
-                className={`flex w-full h-11 sm:h-12 cursor-pointer items-center justify-center rounded-full bg-[#2b8cee] px-6 text-white text-sm sm:text-base font-semibold transition-all hover:bg-[#2070c0] active:scale-[0.98] disabled:bg-slate-100 disabled:text-slate-400 ${
-                  !isFormValid || loading ? 'disabled:cursor-not-allowed' : ''
-                }`}
-              >
-                {loading ? 'Saving...' : 'Continue'}
-              </button>
-
-              {/* Skip Button */}
-              <button
-                onClick={handleSkip}
-                disabled={!canSkip || loading}
-                className={`flex w-full cursor-pointer items-center justify-center rounded-full bg-transparent py-2 text-slate-500 text-sm font-semibold hover:text-slate-800 transition-colors ${
-                  !canSkip || loading ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                Skip for now
-              </button>
-            </div>
-
-            {/* Footer Note */}
-            <div className="mt-3 sm:mt-4 text-center">
-              <p className="text-[10px] text-slate-400 leading-tight">
-                Your information is encrypted and secure
-              </p>
-            </div>
-          </div>
+        {/* ─── Error ─── */}
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700">{error}</div>
         )}
-      </div>
+
+        {/* ─── SSN Section ─── */}
+        <div className="mb-6">
+          <h2 className="ml-4 mb-2 text-[13px] uppercase text-[#8E8E93] font-normal">Social Security Number</h2>
+          <div className="bg-white rounded-xl overflow-hidden ring-1 ring-black/5">
+            {/* SSN Input */}
+            <div className="flex items-center px-4 py-3 bg-white">
+              <input
+                type="text"
+                value={ssn}
+                onChange={handleSSNChange}
+                placeholder="000-00-0000"
+                maxLength={11}
+                inputMode="numeric"
+                className="flex-1 bg-transparent border-none p-0 text-[17px] text-black placeholder-gray-400 focus:ring-0 outline-none tracking-widest"
+              />
+              <span className="material-symbols-outlined text-gray-400 text-xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>lock</span>
+            </div>
+
+            {/* Hairline separator */}
+            <div className="ml-4 h-[0.5px] bg-[#C6C6C8]/50" />
+
+            {/* Why SSN expandable */}
+            <details
+              className="group"
+              open={showInfo}
+              onToggle={(e) => setShowInfo((e.target as HTMLDetailsElement).open)}
+            >
+              <summary className="w-full flex items-center justify-between px-4 py-3.5 bg-white active:bg-gray-50 transition-colors cursor-pointer list-none">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-[#007AFF] text-xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>info</span>
+                  <span className="text-[15px] text-[#007AFF] font-medium">Why do we need your SSN?</span>
+                </div>
+                <span className="material-symbols-outlined text-gray-300 text-base transform transition-transform group-open:rotate-180" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>expand_more</span>
+              </summary>
+              <div className="px-4 pb-4 pt-1">
+                <p className="text-[13px] leading-relaxed text-[#8E8E93]">
+                  We are required by federal law to collect this information to prevent fraud and verify your identity before opening an investment account.
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        {/* ─── DOB Section — 3 iOS Dropdown Selectors ─── */}
+        <div className="mb-8">
+          <h2 className="ml-4 mb-2 text-[13px] uppercase text-[#8E8E93] font-normal">Date of birth</h2>
+          <div className="bg-white rounded-xl overflow-hidden ring-1 ring-black/5">
+            {/* Month selector */}
+            <div className="flex items-center px-4 py-3 relative">
+              <span className="text-[15px] text-[#8E8E93] w-16 shrink-0">Month</span>
+              <select
+                value={dobMonth}
+                onChange={(e) => setDobMonth(e.target.value)}
+                aria-label="Birth month"
+                className="flex-1 bg-transparent border-none p-0 text-[17px] text-black focus:ring-0 outline-none appearance-none cursor-pointer"
+              >
+                <option value="" disabled>Select month</option>
+                {monthNames.map((name, idx) => (
+                  <option key={name} value={String(idx + 1).padStart(2, '0')}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <span className="material-symbols-outlined text-[#C7C7CC] text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>expand_more</span>
+            </div>
+
+            {/* Hairline */}
+            <div className="ml-4 h-[0.5px] bg-[#C6C6C8]/50" />
+
+            {/* Day selector */}
+            <div className="flex items-center px-4 py-3 relative">
+              <span className="text-[15px] text-[#8E8E93] w-16 shrink-0">Day</span>
+              <select
+                value={dobDay}
+                onChange={(e) => setDobDay(e.target.value)}
+                aria-label="Birth day"
+                className="flex-1 bg-transparent border-none p-0 text-[17px] text-black focus:ring-0 outline-none appearance-none cursor-pointer"
+              >
+                <option value="" disabled>Select day</option>
+                {dayOptions.map((d) => (
+                  <option key={d} value={d}>{parseInt(d)}</option>
+                ))}
+              </select>
+              <span className="material-symbols-outlined text-[#C7C7CC] text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>expand_more</span>
+            </div>
+
+            {/* Hairline */}
+            <div className="ml-4 h-[0.5px] bg-[#C6C6C8]/50" />
+
+            {/* Year selector */}
+            <div className="flex items-center px-4 py-3 relative">
+              <span className="text-[15px] text-[#8E8E93] w-16 shrink-0">Year</span>
+              <select
+                value={dobYear}
+                onChange={(e) => setDobYear(e.target.value)}
+                aria-label="Birth year"
+                className="flex-1 bg-transparent border-none p-0 text-[17px] text-black focus:ring-0 outline-none appearance-none cursor-pointer"
+              >
+                <option value="" disabled>Select year</option>
+                {yearOptions.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <span className="material-symbols-outlined text-[#C7C7CC] text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>expand_more</span>
+            </div>
+          </div>
+          {/* Confirmation text when all selected */}
+          {isFormValid && (
+            <p className="ml-4 mt-2 text-[13px] text-[#34C759] font-medium flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>check_circle</span>
+              {monthNames[parseInt(dobMonth) - 1]} {parseInt(dobDay)}, {dobYear}
+            </p>
+          )}
+        </div>
+      </main>
+
+      {/* ═══ Fixed Footer — Skip + Continue ═══ */}
+      {!isFooterVisible && (
+        <div
+          className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-[#C6C6C8]/30 px-4 pt-4 z-40"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+          data-onboarding-footer
+        >
+          <div className="max-w-md mx-auto flex gap-4">
+            <button
+              onClick={handleSkip}
+              className="flex-1 h-[50px] rounded-xl bg-gray-200/80 text-[#007AFF] font-semibold text-[17px] active:scale-[0.98] transition-transform flex items-center justify-center"
+            >
+              Skip
+            </button>
+            <button
+              onClick={handleContinue}
+              disabled={!isFormValid || loading}
+              data-onboarding-cta
+              className={`flex-1 h-[50px] rounded-xl font-semibold text-[17px] shadow-sm active:scale-[0.98] transition-all flex items-center justify-center ${
+                isFormValid && !loading
+                  ? 'bg-[#007AFF] text-white'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {loading ? 'Saving...' : 'Continue'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-export default OnboardingStep9;

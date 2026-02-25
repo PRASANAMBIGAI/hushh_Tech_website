@@ -1,88 +1,157 @@
+/**
+ * Hero — Home Page (iOS-native design)
+ *
+ * Combined scrollable page:
+ * 1. Investment Intro — icon, title, AI+Human card, CTAs, badges
+ * 2. The Hushh Advantage — 2×2 feature grid
+ * 3. Fund A — performance card, strategy list, CTAs
+ * 4. Fixed bottom tab bar
+ *
+ * Backend logic unchanged: auth session, onboarding status, navigation.
+ */
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback, useRef } from "react";
-import { Button, Text, Box, Container, VStack, Image, Flex, Icon, SimpleGrid, Spinner } from "@chakra-ui/react";
-import { motion } from "framer-motion";
-import { useTranslation } from "react-i18next";
+import { useEffect, useState } from "react";
+import { Box, Text, Flex, Spinner, Image } from "@chakra-ui/react";
 import config from "../resources/config/config";
-import WhyChooseSection from "./WhyChooseSection";
 import { Session } from "@supabase/supabase-js";
 import HushhLogo from "./images/Hushhogo.png";
-import { FaRobot, FaShieldAlt, FaChartLine, FaRocket, FaLock } from "react-icons/fa";
-import { HiSparkles } from "react-icons/hi";
-import { BsGrid3X3Gap } from "react-icons/bs";
-import { MdVerifiedUser, MdTrendingUp } from "react-icons/md";
 
-// Motion components
-const MotionBox = motion(Box);
-const MotionButton = motion(Button);
-
-// Apple-like smooth animation variants
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.05,
-    },
-  },
+/* ─── iOS Design Tokens ─── */
+const IOS = {
+  blue: "#007AFF",
+  blueActive: "#0062CC",
+  bg: "#F2F2F7",
+  bgWhite: "#FFFFFF",
+  text: "#000000",
+  subtext: "#86868B",
+  separator: "#C6C6C8",
+  fillGray: "rgba(118,118,128,0.12)",
+  font: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif',
+  fontDisplay: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif',
 };
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.45,
-      ease: [0.25, 0.46, 0.45, 0.94],
-    },
-  },
-};
+/* ─── Inline SVG Icons (no external deps) ─── */
+const PsychologyIcon = () => (
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.22.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill={IOS.blue} opacity="0.8"/>
+  </svg>
+);
 
-const logoVariants = {
-  hidden: { opacity: 0, scale: 0.95 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    transition: {
-      duration: 0.5,
-      ease: [0.25, 0.46, 0.45, 0.94],
-    },
-  },
-};
+const SparkIcon = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+    <path d="M12 2L14.09 8.26L20 9.27L15.55 13.97L16.91 20L12 16.9L7.09 20L8.45 13.97L4 9.27L9.91 8.26L12 2Z" fill="white"/>
+  </svg>
+);
 
-const buttonHoverVariants = {
-  rest: { scale: 1 },
-  hover: { 
-    scale: 1.02,
-    transition: { duration: 0.2, ease: "easeOut" }
-  },
-  tap: { 
-    scale: 0.98,
-    transition: { duration: 0.1 }
-  },
-};
+const ShieldIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" fill="#8E8E93"/>
+  </svg>
+);
 
-// Apple Design Tokens
-const tokens = {
-  bg: "#F5F5F7",
-  surface: "#FFFFFF",
-  textPrimary: "#1D1D1F",
-  textSecondary: "#515154",
-  textMuted: "#8E8E93",
-  accent: "#0A84FF",
-  gradientStart: "#00A9E0",
-  gradientEnd: "#6DD3EF",
-  separator: "#E5E5EA",
-};
+const LockSmallIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <rect x="5" y="11" width="14" height="10" rx="2" fill="#8E8E93"/>
+    <path d="M8 11V8a4 4 0 118 0v3" stroke="#8E8E93" strokeWidth="2" fill="none"/>
+  </svg>
+);
 
+const ChevronRight = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path d="M9 6l6 6-6 6" stroke="#C7C7CC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+/* ─── Feature Grid Item ─── */
+const FeatureCard = ({ icon, iconBg, iconColor, title, desc }: {
+  icon: string; iconBg: string; iconColor: string; title: string; desc: string;
+}) => (
+  <Box
+    bg="white"
+    p={4}
+    borderRadius="20px"
+    boxShadow="inset 0 0 0 0.5px #E5E5EA"
+    display="flex"
+    flexDir="column"
+    justifyContent="space-between"
+    h="140px"
+  >
+    <Flex
+      w="32px" h="32px" borderRadius="full"
+      bg={iconBg} align="center" justify="center"
+    >
+      <Text fontSize="20px" lineHeight="1" role="img" aria-label={title}
+        sx={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}
+        className="material-symbols-outlined"
+        color={iconColor}
+      >
+        {icon}
+      </Text>
+    </Flex>
+    <Box>
+      <Text fontSize="15px" fontWeight="600" color={IOS.text} mb={0.5}>{title}</Text>
+      <Text fontSize="12px" color="rgba(60,60,67,0.6)" lineHeight="16px">{desc}</Text>
+    </Box>
+  </Box>
+);
+
+/* ─── Strategy List Item ─── */
+const StrategyItem = ({ icon, iconBg, title, subtitle, isLast = false }: {
+  icon: string; iconBg: string; title: string; subtitle: string; isLast?: boolean;
+}) => (
+  <Flex
+    align="center" px={4} py={3}
+    borderBottom={isLast ? "none" : "0.5px solid"}
+    borderColor="rgba(198,198,200,0.4)"
+    cursor="pointer"
+    transition="background 0.15s"
+    _active={{ bg: "#D1D1D6" }}
+  >
+    <Flex
+      w="30px" h="30px" borderRadius="7px"
+      bg={iconBg} align="center" justify="center" mr={3} flexShrink={0}
+    >
+      <Text fontSize="18px" color="white" lineHeight="1"
+        className="material-symbols-outlined"
+        sx={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}
+      >
+        {icon}
+      </Text>
+    </Flex>
+    <Box flex="1" py={0.5}>
+      <Text fontSize="17px" color={IOS.text}>{title}</Text>
+    </Box>
+    <Flex align="center">
+      <Text fontSize="17px" color="rgba(60,60,67,0.6)" mr={1}>{subtitle}</Text>
+      <ChevronRight />
+    </Flex>
+  </Flex>
+);
+
+/* ─── Tab Bar Item ─── */
+const TabItem = ({ icon, label, active = false }: {
+  icon: string; label: string; active?: boolean;
+}) => (
+  <Flex flexDir="column" align="center" gap={1} w="64px" opacity={active ? 1 : 0.6}>
+    <Text
+      fontSize="26px" lineHeight="1"
+      color={active ? IOS.blue : "#8E8E93"}
+      className="material-symbols-outlined"
+      sx={{ fontVariationSettings: `'FILL' ${active ? 1 : 0}, 'wght' ${active ? 500 : 400}` }}
+    >
+      {icon}
+    </Text>
+    <Text fontSize="10px" fontWeight="500" color={active ? IOS.blue : "#8E8E93"}>{label}</Text>
+  </Flex>
+);
+
+/* ═══════════════════════════════════════════════
+   HERO COMPONENT — All backend logic preserved
+   ═══════════════════════════════════════════════ */
 export default function Hero() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
   const [session, setSession] = useState<Session | null>(null);
-  
-  // Onboarding status state (from ProfilePage logic)
+
   const [onboardingStatus, setOnboardingStatus] = useState<{
     hasProfile: boolean;
     isCompleted: boolean;
@@ -92,41 +161,40 @@ export default function Hero() {
     hasProfile: false,
     isCompleted: false,
     currentStep: 1,
-    loading: true
+    loading: true,
   });
-  
+
+  /* Auth session listener */
   useEffect(() => {
-    if (config.supabaseClient) {
-      config.supabaseClient.auth.getSession().then(({ data: { session } }) => {
-        setSession(session);
-      });
+    if (!config.supabaseClient) return;
 
-      const { data: { subscription } } = config.supabaseClient.auth.onAuthStateChange((_event, session) => {
-        setSession(session);
-      });
+    config.supabaseClient.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
 
-      return () => subscription?.unsubscribe();
-    }
+    const { data: { subscription } } = config.supabaseClient.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription?.unsubscribe();
   }, []);
 
-  // Check user's onboarding status when logged in
+  /* Check onboarding status when logged in */
   useEffect(() => {
     async function checkUserStatus() {
       if (!session?.user?.id || !config.supabaseClient) {
         setOnboardingStatus(prev => ({ ...prev, loading: false }));
         return;
       }
-      
+
       try {
-        // Check if investor_profile exists
         const { data: profile, error: profileError } = await config.supabaseClient
           .from('investor_profiles')
           .select('id, user_confirmed')
           .eq('user_id', session.user.id)
           .maybeSingle();
 
-        // Check onboarding_data status
-        const { data: onboarding, error: onboardingError } = await config.supabaseClient
+        const { data: onboarding } = await config.supabaseClient
           .from('onboarding_data')
           .select('is_completed, current_step')
           .eq('user_id', session.user.id)
@@ -136,7 +204,7 @@ export default function Hero() {
           hasProfile: !!profile && !profileError,
           isCompleted: onboarding?.is_completed || false,
           currentStep: onboarding?.current_step || 1,
-          loading: false
+          loading: false,
         });
       } catch (error) {
         console.error('Error checking user status:', error);
@@ -151,743 +219,322 @@ export default function Hero() {
     }
   }, [session?.user?.id]);
 
-  // Get primary CTA content based on login state
-  const getPrimaryCTAContent = () => {
-    // Not logged in
+  /* Dynamic CTA based on auth + onboarding state */
+  const getPrimaryCTA = () => {
     if (!session) {
-      return { 
-        text: "Get Started", 
-        action: () => navigate("/investor-profile"),
-        loading: false
-      };
+      return { text: "Complete Your Hushh Profile", action: () => navigate("/investor-profile"), loading: false };
     }
-    
-    // Logged in - check onboarding status
     if (onboardingStatus.loading) {
       return { text: "Loading...", action: () => {}, loading: true };
     }
     if (onboardingStatus.hasProfile || onboardingStatus.isCompleted) {
-      return { 
-        text: "View Your Profile", 
-        action: () => navigate("/hushh-user-profile"),
-        loading: false
-      };
+      return { text: "View Your Profile", action: () => navigate("/hushh-user-profile"), loading: false };
     }
     if (onboardingStatus.currentStep > 1) {
-      return { 
-        text: `Continue Onboarding (Step ${onboardingStatus.currentStep})`, 
+      return {
+        text: `Continue Onboarding (Step ${onboardingStatus.currentStep})`,
         action: () => navigate(`/onboarding/step-${onboardingStatus.currentStep}`),
-        loading: false
+        loading: false,
       };
     }
-    return { 
-      text: "Complete Your Hushh Profile", 
-      action: () => navigate("/onboarding/financial-link"),
-      loading: false
-    };
+    return { text: "Complete Your Hushh Profile", action: () => navigate("/onboarding/financial-link"), loading: false };
   };
 
-  const primaryCTA = getPrimaryCTAContent();
-  const secondaryButtonText = session ? "Discover Fund A" : "Learn More";
+  const primaryCTA = getPrimaryCTA();
 
+  /* ─── RENDER ─── */
   return (
-    <>
-      {/* Hero Section - Same design for both logged in and logged out */}
+    <Box
+      bg={IOS.bg}
+      fontFamily={IOS.font}
+      minH="100dvh"
+      position="relative"
+      sx={{ WebkitFontSmoothing: "antialiased", MozOsxFontSmoothing: "grayscale" }}
+    >
+      {/* Scrollable content */}
       <Box
-            bg="#f6f6f8"
-            position="relative"
-            display="flex"
-            flexDirection="column"
-            alignItems="center"
-            style={{ fontFamily: 'Manrope, sans-serif' }}
+        as="main"
+        maxW="393px"
+        mx="auto"
+        pb="120px"
+        pt="50px"
+      >
+        {/* ═══ Section 1: Investment Intro ═══ */}
+        <Flex flexDir="column" align="center" px={6} pt={4} pb={2} bg="white" borderBottomRadius="0">
+          {/* Hushh Brand Logo */}
+          <Flex
+            w="72px" h="72px" borderRadius="full"
+            bg="white" align="center" justify="center" mb={6}
+            border="1px solid" borderColor="gray.100"
+            boxShadow="0 2px 12px rgba(0,0,0,0.06)"
           >
-            {/* Mobile Container */}
+            <Image
+              src={HushhLogo}
+              alt="Hushh brand logo"
+              w="48px" h="48px"
+              objectFit="contain"
+            />
+          </Flex>
+
+          {/* Title */}
+          <Text
+            fontSize="34px" lineHeight="41px" fontWeight="700"
+            textAlign="center" letterSpacing="-0.02em"
+            fontFamily={IOS.fontDisplay} color={IOS.text} mb={3}
+          >
+            Investing in the <br />
+            <Box as="span" color={IOS.blue}>Future</Box>
+          </Text>
+
+          {/* Subtitle */}
+          <Text
+            fontSize="17px" lineHeight="22px" textAlign="center"
+            color={IOS.subtext} fontWeight="400" letterSpacing="-0.01em"
+            px={2} mb={4}
+          >
+            The AI-Powered Berkshire Hathaway. We combine AI and human expertise
+            to invest in exceptional businesses for long-term value creation.
+          </Text>
+
+          {/* AI + Human — Two iOS widget cards */}
+          <Flex w="100%" gap={3} my={4}>
+            {/* AI Card */}
             <Box
-              position="relative"
-              display="flex"
-              w="100%"
-              maxW="500px"
-              flexDirection="column"
-              bg="white"
-              mx="auto"
-              borderX="1px solid"
-              borderColor="#f1f5f9"
+              flex="1" bg="white" borderRadius="16px"
+              p={4} pb={5}
+              border="0.5px solid" borderColor="rgba(0,0,0,0.06)"
+              boxShadow="0 1px 3px rgba(0,0,0,0.04)"
             >
-              {/* Main Content Area - Scrollable */}
               <Box
-                as="main"
-                display="flex"
-                flexDirection="column"
-                alignItems="center"
-                px={6}
-                pt={{ base: "100px", md: "120px" }} /* Space below header/navbar */
-                pb={4}
+                w="8px" h="8px" borderRadius="full"
+                bg={IOS.blue} mb={3}
+              />
+              <Text fontSize="22px" fontWeight="700" color={IOS.text}
+                lineHeight="26px" letterSpacing="-0.02em"
+                fontFamily={IOS.fontDisplay} mb={1}
               >
-                <MotionBox
-                  initial="hidden"
-                  animate="visible"
-                  variants={containerVariants}
-                  display="flex"
-                  flexDirection="column"
-                  alignItems="center"
-                  w="100%"
-                >
-                  {/* Logo - With soft halo blur effect */}
-                  <MotionBox 
-                    display="flex" 
-                    justifyContent="center"
-                    alignItems="center"
-                    mb={8}
-                    variants={logoVariants}
-                    position="relative"
-                  >
-                    {/* Blur background effect */}
-                    <Box
-                      position="absolute"
-                      w="128px"
-                      h="128px"
-                      bg="rgba(19, 91, 236, 0.1)"
-                      borderRadius="full"
-                      filter="blur(24px)"
-                    />
-                    {/* Logo container with soft-halo shadow */}
-                    <Flex
-                      position="relative"
-                      zIndex={10}
-                      w="96px"
-                      h="96px"
-                      bg="white"
-                      borderRadius="full"
-                      align="center"
-                      justify="center"
-                      boxShadow="0 0 40px 0 rgba(19, 91, 236, 0.15)"
-                      border="1px solid"
-                      borderColor="#f1f5f9"
-                    >
-                      <Image
-                        src={HushhLogo}
-                        alt="Hushh brand logo"
-                        w="48px"
-                        h="48px"
-                        objectFit="contain"
-                      />
-                    </Flex>
-                  </MotionBox>
+                AI-Powered
+              </Text>
+              <Text fontSize="13px" lineHeight="18px" color={IOS.subtext}>
+                Institutional grade analytics and real-time signals.
+              </Text>
+            </Box>
 
-                  {/* Main Heading - Exact typography */}
-                  <MotionBox mb={4} variants={itemVariants}>
-                    <Text
-                      fontSize={{ base: "32px", md: "36px" }}
-                      fontWeight="800"
-                      color="#111318"
-                      lineHeight="1.15"
-                      letterSpacing="tight"
-                      textAlign="center"
-                    >
-                      Investing in the Future.
-                    </Text>
-                  </MotionBox>
-
-                  {/* Subheading - Controlled width */}
-                  <MotionBox mb={4} variants={itemVariants}>
-                    <Text
-                      fontSize="16px"
-                      color="#64748b"
-                      lineHeight="relaxed"
-                      fontWeight="500"
-                      maxW="320px"
-                      textAlign="center"
-                    >
-                      The AI-Powered Berkshire Hathaway. We combine AI and human expertise to invest in exceptional businesses for long-term value creation.
-                    </Text>
-                  </MotionBox>
-                </MotionBox>
-              </Box>
-
-              {/* CTA Section - Scrollable, not fixed */}
+            {/* Human Card */}
+            <Box
+              flex="1" bg="white" borderRadius="16px"
+              p={4} pb={5}
+              border="0.5px solid" borderColor="rgba(0,0,0,0.06)"
+              boxShadow="0 1px 3px rgba(0,0,0,0.04)"
+            >
               <Box
-                w="100%"
-                display="flex"
-                flexDirection="column"
-                alignItems="center"
-                bg="white"
-                px={6}
-                pt={5}
-                pb={8}
-                borderTop="1px solid"
-                borderColor="#f1f5f9"
+                w="8px" h="8px" borderRadius="full"
+                bg="#34C759" mb={3}
+              />
+              <Text fontSize="22px" fontWeight="700" color={IOS.text}
+                lineHeight="26px" letterSpacing="-0.02em"
+                fontFamily={IOS.fontDisplay} mb={1}
               >
-                {/* CTA Card - Soft elevated shadow */}
-                <Box
-                  w="100%"
-                  bg="white"
-                  borderRadius="2xl"
-                  p={5}
-                  border="1px solid"
-                  borderColor="#f8fafc"
-                  boxShadow="0 12px 36px -4px rgba(0, 0, 0, 0.08)"
-                >
-                  <VStack spacing={3}>
-                    {/* Primary Button - Rounded full, primary color */}
-                    <MotionButton
-                      onClick={primaryCTA.action}
-                      w="100%"
-                      h="48px"
-                      borderRadius="full"
-                      bg="#2b8cee"
-                      color="white"
-                      fontSize="16px"
-                      fontWeight="700"
-                      letterSpacing="0.015em"
-                      isDisabled={primaryCTA.loading}
-                      _hover={{ 
-                        bg: "#2563eb",
-                      }}
-                      _active={{
-                        transform: "scale(0.98)",
-                      }}
-                      _disabled={{
-                        opacity: 0.7,
-                        cursor: "not-allowed",
-                      }}
-                      boxShadow="0 10px 25px rgba(43, 140, 238, 0.25)"
-                      variants={buttonHoverVariants}
-                      initial="rest"
-                      whileHover="hover"
-                      whileTap="tap"
-                    >
-                      {primaryCTA.loading ? <Spinner size="sm" /> : primaryCTA.text}
-                    </MotionButton>
+                Human-Led
+              </Text>
+              <Text fontSize="13px" lineHeight="18px" color={IOS.subtext}>
+                Seasoned expert oversight for generational wealth.
+              </Text>
+            </Box>
+          </Flex>
 
-                    {/* Secondary Button - Outlined with primary border */}
-                    <MotionButton
-                      onClick={() => navigate("/discover-fund-a")}
-                      w="100%"
-                      h="48px"
-                      borderRadius="full"
-                      bg="transparent"
-                      border="1px solid"
-                      borderColor="#2b8cee"
-                      color="#111318"
-                      fontSize="16px"
-                      fontWeight="700"
-                      letterSpacing="0.015em"
-                      _hover={{ 
-                        bg: "rgba(0, 0, 0, 0.02)",
-                      }}
-                      _active={{ 
-                        bg: "rgba(0, 0, 0, 0.04)",
-                      }}
-                      variants={buttonHoverVariants}
-                      initial="rest"
-                      whileHover="hover"
-                      whileTap="tap"
-                    >
-                      {secondaryButtonText}
-                    </MotionButton>
-                  </VStack>
-                </Box>
+          {/* CTAs */}
+          <Box w="100%" mt={2} mb={2}>
+            <Box
+              as="button" w="100%" bg={IOS.blue} color="white"
+              fontWeight="600" fontSize="17px" py="16px" borderRadius="14px"
+              textAlign="center" cursor="pointer" mb={3.5}
+              transition="background 0.2s"
+              _active={{ bg: IOS.blueActive }}
+              _disabled={{ opacity: 0.6, cursor: "not-allowed" }}
+              onClick={primaryCTA.action}
+              aria-label={primaryCTA.text}
+              {...(primaryCTA.loading ? { opacity: 0.6 } : {})}
+            >
+              {primaryCTA.loading ? <Spinner size="sm" color="white" /> : primaryCTA.text}
+            </Box>
 
-                {/* Trust Tagline */}
-                <Text
-                  fontSize="14px"
-                  fontWeight="500"
-                  color="#94a3b8"
-                  textAlign="center"
-                  mt={5}
-                  mb={3}
-                >
-                  Secure. Private. AI-Powered.
-                </Text>
-
-                {/* Trust Badges - SEC REGISTERED & BANK LEVEL SECURITY */}
-                <Flex justify="center" align="center" gap={5}>
-                  {/* SEC REGISTERED Badge - with animated pulsing green dot */}
-                  <Flex align="center" gap={2}>
-                    <Box 
-                      w="8px" 
-                      h="8px" 
-                      borderRadius="full" 
-                      bg="#22c55e"
-                      className="pulse-dot"
-                      sx={{
-                        animation: "pulse 2s ease-in-out infinite",
-                        "@keyframes pulse": {
-                          "0%, 100%": { opacity: 1, transform: "scale(1)" },
-                          "50%": { opacity: 0.6, transform: "scale(1.15)" },
-                        },
-                      }}
-                    />
-                    <Text fontSize="13px" fontWeight="600" color="#64748b">
-                      SEC REGISTERED
-                    </Text>
-                  </Flex>
-
-                  {/* BANK LEVEL SECURITY Badge - with lock icon */}
-                  <Flex align="center" gap={2}>
-                    <Icon as={FaLock} boxSize="12px" color="#64748b" />
-                    <Text fontSize="13px" fontWeight="600" color="#64748b">
-                      BANK LEVEL SECURITY
-                    </Text>
-                  </Flex>
-                </Flex>
-              </Box>
+            <Box
+              as="button" w="100%" bg={IOS.fillGray} color={IOS.blue}
+              fontWeight="600" fontSize="17px" py="16px" borderRadius="14px"
+              textAlign="center" cursor="pointer"
+              transition="background 0.2s"
+              _active={{ bg: "#E5E5EA" }}
+              onClick={() => navigate("/discover-fund-a")}
+            >
+              Discover Fund A
             </Box>
           </Box>
-      
-      <WhyChooseSection />
-      
-      {/* Fund A Section - Exact HTML Template Match */}
-      <Box 
-        bg="white"
-        pt={{ base: "24px", md: "32px" }} 
-        pb={{ base: "32px", md: "40px" }} 
-        px={6}
-        style={{ fontFamily: 'Manrope, sans-serif' }}
-      >
-        <Container maxW="500px" px={0}>
-          <MotionBox
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-            variants={containerVariants}
+
+          {/* Trust Badges */}
+          <Flex align="center" justify="center" gap={6} mt={4} mb={6} opacity={0.6}>
+            <Flex align="center" gap={1.5}>
+              <ShieldIcon />
+              <Text fontSize="10px" fontWeight="600" color="#8E8E93" letterSpacing="0.04em" textTransform="uppercase">
+                SEC Registered
+              </Text>
+            </Flex>
+            <Box w="1px" h="12px" bg="rgba(0,0,0,0.1)" />
+            <Flex align="center" gap={1.5}>
+              <LockSmallIcon />
+              <Text fontSize="10px" fontWeight="600" color="#8E8E93" letterSpacing="0.04em" textTransform="uppercase">
+                Bank Level Security
+              </Text>
+            </Flex>
+          </Flex>
+        </Flex>
+
+        {/* ═══ Section 2: The Hushh Advantage ═══ */}
+        <Box px={5} pt={8} pb={4}>
+          <Text
+            fontSize="34px" lineHeight="41px" fontWeight="700"
+            letterSpacing="-0.02em" fontFamily={IOS.fontDisplay} color={IOS.text}
           >
-            {/* Section Label - Eyebrow */}
-            <MotionBox textAlign="center" pt={6} pb={2} variants={itemVariants}>
-              <Text
-                fontSize="12px"
-                letterSpacing="0.1em"
-                fontWeight="700"
-                color="#617589"
-                textTransform="uppercase"
-              >
-                Investor Profile
-              </Text>
-            </MotionBox>
+            The Hushh <br />
+            <Box as="span" color={IOS.blue}>Advantage</Box>
+          </Text>
+        </Box>
 
-            {/* Section Title */}
-            <MotionBox textAlign="center" pb={4} variants={itemVariants}>
-              <Text
-                fontSize="32px"
-                fontWeight="800"
-                color="#111418"
-                lineHeight="tight"
-                letterSpacing="tight"
-              >
-                Fund A
-              </Text>
-            </MotionBox>
+        <Box px={4} mb={8}>
+          <Flex gap={3} wrap="wrap">
+            <Box flex="1" minW="45%">
+              <FeatureCard icon="analytics" iconBg="rgba(0,122,255,0.1)" iconColor={IOS.blue}
+                title="Data Driven" desc="Real-time market analytics." />
+            </Box>
+            <Box flex="1" minW="45%">
+              <FeatureCard icon="percent" iconBg="rgba(52,199,89,0.12)" iconColor="#34C759"
+                title="Low Fees" desc="Maximize your total returns." />
+            </Box>
+            <Box flex="1" minW="45%">
+              <FeatureCard icon="verified_user" iconBg="rgba(255,149,0,0.12)" iconColor="#FF9500"
+                title="Expert Vetted" desc="Curated top opportunities." />
+            </Box>
+            <Box flex="1" minW="45%">
+              <FeatureCard icon="smart_toy" iconBg="rgba(175,82,222,0.12)" iconColor="#AF52DE"
+                title="Automated" desc="Hands-free smart investing." />
+            </Box>
+          </Flex>
+        </Box>
 
-            {/* Section Description */}
-            <MotionBox textAlign="center" pb={8} variants={itemVariants}>
-              <Text
-                fontSize="16px"
-                color="#111418"
-                lineHeight="relaxed"
-                fontWeight="500"
-                maxW="340px"
-                mx="auto"
-                opacity={0.8}
-              >
-                Our flagship growth fund focusing on diversified assets across emerging tech sectors. Designed for long-term capital appreciation.
-              </Text>
-            </MotionBox>
+        {/* ═══ Section 3: Fund A ═══ */}
+        <Box px={5} mb={2} mt={4}>
+          <Text fontSize="22px" lineHeight="28px" fontWeight="700"
+            fontFamily={IOS.fontDisplay} color={IOS.text} letterSpacing="0.35px"
+          >
+            Fund A
+          </Text>
+        </Box>
 
-            {/* Targeting IRR Banner - Exact match with larger text */}
-            <MotionBox variants={itemVariants} mb={8}>
-              <Flex
-                w="100%"
-                bg="rgba(43, 140, 238, 0.1)"
-                p={{ base: 6, sm: 8 }}
-                borderRadius="xl"
-                flexDirection="column"
-                align="center"
-                justify="center"
-              >
-                <Text
-                  fontSize={{ base: "32px", sm: "40px" }}
-                  fontWeight="800"
-                  color="#111418"
-                  textAlign="center"
-                  lineHeight="tight"
-                  letterSpacing="-0.02em"
+        {/* Performance Card */}
+        <Box px={4} mb={6}>
+          <Box bg="white" borderRadius="20px" p={5}
+            boxShadow="0 1px 3px rgba(0,0,0,0.04)" border="1px solid rgba(0,0,0,0.03)"
+          >
+            <Flex justify="space-between" align="flex-start" mb={6}>
+              <Box>
+                <Text fontSize="11px" fontWeight="600" color="rgba(60,60,67,0.6)"
+                  textTransform="uppercase" letterSpacing="0.06em"
                 >
-                  Targeting{" "}
-                  <Text as="span" color="#2b8cee">
-                    18–23%
-                  </Text>{" "}
-                  net IRR*
+                  Target Net IRR
                 </Text>
-              </Flex>
-            </MotionBox>
-
-            {/* 2x2 Staggered Feature Cards Grid - Exact match */}
-            <MotionBox variants={itemVariants} pb={8}>
-              <SimpleGrid columns={2} spacingX={4} spacingY={6}>
-                {/* High Growth Card */}
-                <Flex
-                  flexDirection="column"
-                  align="flex-start"
-                  p={4}
-                  borderRadius="lg"
-                  bg="#f9fafb"
-                  border="1px solid transparent"
+                <Text fontSize="40px" lineHeight="1" fontWeight="700" color={IOS.blue}
+                  letterSpacing="-0.02em" mt={1}
                 >
-                  <Icon as={MdTrendingUp} boxSize="32px" color="#2b8cee" mb={2} />
-                  <Text fontSize="15px" fontWeight="700" color="#1f2937" textAlign="left">
-                    High Growth
-                  </Text>
-                </Flex>
+                  18–23%
+                </Text>
+              </Box>
+              <Box bg="rgba(0,122,255,0.08)" color={IOS.blue} px={3} py={1}
+                borderRadius="full" fontSize="12px" fontWeight="600"
+              >
+                High Growth
+              </Box>
+            </Flex>
 
-                {/* Diversified Card - Staggered with mt-6 */}
-                <Flex
-                  flexDirection="column"
-                  align="flex-start"
-                  p={4}
-                  borderRadius="lg"
-                  bg="#f9fafb"
-                  border="1px solid transparent"
-                  mt={6}
-                >
-                  <Icon as={BsGrid3X3Gap} boxSize="32px" color="#2b8cee" mb={2} />
-                  <Text fontSize="15px" fontWeight="700" color="#1f2937" textAlign="left">
-                    Diversified
-                  </Text>
-                </Flex>
-
-                {/* Secure Assets Card */}
-                <Flex
-                  flexDirection="column"
-                  align="flex-start"
-                  p={4}
-                  borderRadius="lg"
-                  bg="#f9fafb"
-                  border="1px solid transparent"
-                >
-                  <Icon as={MdVerifiedUser} boxSize="32px" color="#2b8cee" mb={2} />
-                  <Text fontSize="15px" fontWeight="700" color="#1f2937" textAlign="left">
-                    Secure Assets
-                  </Text>
-                </Flex>
-
-                {/* Emerging Tech Card - Staggered with mt-6 */}
-                <Flex
-                  flexDirection="column"
-                  align="flex-start"
-                  p={4}
-                  borderRadius="lg"
-                  bg="#f9fafb"
-                  border="1px solid transparent"
-                  mt={6}
-                >
-                  <Icon as={FaRocket} boxSize="32px" color="#2b8cee" mb={2} />
-                  <Text fontSize="15px" fontWeight="700" color="#1f2937" textAlign="left">
-                    Emerging Tech
-                  </Text>
-                </Flex>
-              </SimpleGrid>
-            </MotionBox>
-
-            {/* Stats - Stacked vertically like HTML template */}
-            <MotionBox variants={itemVariants} mb={8}>
-              <VStack spacing={4} w="100%">
-                {/* Target Net IRR Card */}
-                <Flex 
-                  w="100%"
-                  py={5}
-                  px={2}
-                  bg="white"
-                  borderRadius="xl"
-                  border="1px solid"
-                  borderColor="#f3f4f6"
-                  boxShadow="sm"
-                  flexDirection="column"
-                  align="center"
-                  role="group"
-                  sx={{
-                    transition: "all 0.2s ease",
-                  }}
-                  _hover={{
-                    "& p:first-of-type": {
-                      color: "#2b8cee"
-                    }
-                  }}
-                >
-                  <Text 
-                    fontSize="10px" 
-                    letterSpacing="0.1em" 
-                    fontWeight="700" 
-                    color="#617589" 
-                    textTransform="uppercase" 
-                    mb={1.5}
-                    transition="color 0.2s ease"
-                  >
-                    Target Net IRR
-                  </Text>
-                  <Text fontSize={{ base: "24px", sm: "30px" }} fontWeight="700" color="#111418" letterSpacing="tight">
-                    18-23%
-                  </Text>
-                </Flex>
-                
-                {/* Inception Card */}
-                <Flex 
-                  w="100%"
-                  py={5}
-                  px={2}
-                  bg="white"
-                  borderRadius="xl"
-                  border="1px solid"
-                  borderColor="#f3f4f6"
-                  boxShadow="sm"
-                  flexDirection="column"
-                  align="center"
-                  role="group"
-                  sx={{
-                    transition: "all 0.2s ease",
-                  }}
-                  _hover={{
-                    "& p:first-of-type": {
-                      color: "#2b8cee"
-                    }
-                  }}
-                >
-                  <Text 
-                    fontSize="10px" 
-                    letterSpacing="0.1em" 
-                    fontWeight="700" 
-                    color="#617589" 
-                    textTransform="uppercase" 
-                    mb={1.5}
-                    transition="color 0.2s ease"
-                  >
-                    Inception
-                  </Text>
-                  <Text fontSize={{ base: "24px", sm: "30px" }} fontWeight="700" color="#111418" letterSpacing="tight">
-                    2024
-                  </Text>
-                </Flex>
-              </VStack>
-            </MotionBox>
-
-            {/* Disclaimer */}
-            <Text
-              fontSize="11px"
-              color="#9ca3af"
-              fontWeight="500"
-              mb={6}
-              textAlign="center"
-              lineHeight="snug"
-              px={4}
-            >
-              *Past performance is not indicative of future results. Investment involves risk including possible loss of principal.
-            </Text>
-
-            {/* CTA Button - Exact match */}
-            <MotionBox variants={itemVariants} w="100%">
-              <MotionButton
+            <Flex justify="space-between" align="flex-end" borderTop="1px solid" borderColor="gray.100" pt={4}>
+              <Box>
+                <Text fontSize="12px" color="rgba(60,60,67,0.6)">Inception Year</Text>
+                <Text fontSize="17px" fontWeight="600" color={IOS.text}>2024</Text>
+              </Box>
+              <Flex align="center" gap={1} cursor="pointer" color={IOS.blue}
                 onClick={() => navigate("/discover-fund-a")}
-                w="100%"
-                h="48px"
-                borderRadius="lg"
-                bg="#2b8cee"
-                color="white"
-                fontSize="16px"
-                fontWeight="700"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                _hover={{ 
-                  bg: "#2563eb",
-                }}
-                _active={{
-                  bg: "#1d4ed8",
-                  transform: "scale(0.98)",
-                }}
-                boxShadow="0 10px 25px rgba(43, 140, 238, 0.25)"
-                variants={buttonHoverVariants}
-                initial="rest"
-                whileHover="hover"
-                whileTap="tap"
               >
-                Learn More About Fund A
-              </MotionButton>
-            </MotionBox>
-          </MotionBox>
-        </Container>
-      </Box>
-      
-      {/* Mission CTA Section - Exact HTML Template Match */}
-      <Box
-        bg="white"
-        position="relative"
-        minH="100vh"
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        justifyContent="center"
-        p={4}
-        overflow="hidden"
-        style={{ fontFamily: 'Manrope, sans-serif' }}
-      >
-        {/* CTA Card Container - Exact match to HTML template */}
-        <Box
-          w="100%"
-          maxW="400px"
-          bg="white"
-          borderRadius="32px"
-          border="1px solid"
-          borderColor="#e5e7eb"
-          boxShadow="0 10px 40px -10px rgba(0,0,0,0.08)"
-          p={6}
-          display="flex"
-          flexDirection="column"
-          alignItems="center"
-          textAlign="center"
-          gap={8}
-          position="relative"
-          zIndex={10}
-        >
-          {/* Content Group */}
-          <VStack spacing={6} w="100%">
-            {/* Chips - Stacked vertical pill list layout */}
-            <VStack spacing={2} w="100%" align="center">
-              {/* Verified Fund Chip */}
-              <Flex
-                h="32px"
-                w="fit-content"
-                shrink={0}
-                align="center"
-                justify="center"
-                gap={2}
-                borderRadius="full"
-                bg="#f0f2f4"
-                px={4}
-                transition="all 0.2s"
-              >
-                <Icon as={MdVerifiedUser} boxSize="18px" color="#2b8cee" />
-                <Text
-                  color="#111418"
-                  fontSize="12px"
-                  fontWeight="600"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                  lineHeight="normal"
-                >
-                  Verified Fund
-                </Text>
+                <Text fontSize="15px" fontWeight="500">Performance details</Text>
+                <ChevronRight />
               </Flex>
-              
-              {/* Top Rated Performance Chip */}
-              <Flex
-                h="32px"
-                w="fit-content"
-                shrink={0}
-                align="center"
-                justify="center"
-                gap={2}
-                borderRadius="full"
-                bg="#f0f2f4"
-                px={4}
-                transition="all 0.2s"
-              >
-                <Icon as={MdTrendingUp} boxSize="18px" color="#2b8cee" />
-                <Text
-                  color="#111418"
-                  fontSize="12px"
-                  fontWeight="600"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                  lineHeight="normal"
-                >
-                  Top Rated Performance
-                </Text>
-              </Flex>
-            </VStack>
-            
-            {/* Text Content */}
-            <VStack spacing={3}>
-              <Text
-                color="#111418"
-                letterSpacing="tight"
-                fontSize="28px"
-                fontWeight="800"
-                lineHeight="1.2"
-              >
-                Join the Future of Investing
-              </Text>
-              <Text
-                color="#637588"
-                fontSize="16px"
-                fontWeight="500"
-                lineHeight="relaxed"
-                maxW="320px"
-                mx="auto"
-              >
-                Secure your financial freedom with Hushh Fund A today. Experience low-risk growth tailored for you.
-              </Text>
-            </VStack>
-          </VStack>
-          
-          {/* Button Group */}
-          <VStack spacing={3} w="100%" mt={2}>
-            {/* Primary CTA */}
-            <MotionButton
-              onClick={() => navigate("/investor-profile")}
-              w="100%"
-              h="56px"
-              borderRadius="full"
-              bg="#2b8cee"
-              color="white"
-              fontSize="16px"
-              fontWeight="700"
-              letterSpacing="0.015em"
-              overflow="hidden"
-              _hover={{ 
-                bg: "#2b8cee",
-                opacity: 0.9,
-              }}
-              _active={{
-                transform: "scale(0.98)",
-              }}
-              boxShadow="0 10px 25px rgba(43, 140, 238, 0.25)"
-              variants={buttonHoverVariants}
-              initial="rest"
-              whileHover="hover"
-              whileTap="tap"
-            >
-              Get Started Now
-            </MotionButton>
+            </Flex>
+          </Box>
 
-            {/* Secondary CTA */}
-            <MotionButton
-              onClick={() => navigate("/discover-fund-a")}
-              w="100%"
-              h="56px"
-              borderRadius="full"
-              bg="transparent"
-              border="2px solid"
-              borderColor="#2b8cee"
-              color="#2b8cee"
-              fontSize="16px"
-              fontWeight="700"
-              letterSpacing="0.015em"
-              overflow="hidden"
-              _hover={{ 
-                bg: "rgba(43, 140, 238, 0.05)",
-              }}
-              _active={{ 
-                transform: "scale(0.98)",
-              }}
-              variants={buttonHoverVariants}
-              initial="rest"
-              whileHover="hover"
-              whileTap="tap"
-            >
-              Learn More
-            </MotionButton>
-          </VStack>
+          <Text px={1} mt={2} fontSize="13px" color="rgba(60,60,67,0.6)" lineHeight="18px">
+            Flagship growth fund focusing on diversified assets across emerging tech sectors.
+          </Text>
+        </Box>
+
+        {/* Strategy List */}
+        <Box px={4} mb={8}>
+          <Box bg="white" borderRadius="10px" overflow="hidden">
+            <StrategyItem icon="trending_up" iconBg="#3B82F6" title="High Growth" subtitle="Accelerated" />
+            <StrategyItem icon="grid_view" iconBg="#6B7280" title="Diversified" subtitle="Multi-sector" />
+            <StrategyItem icon="shield" iconBg="#F97316" title="Secure Assets" subtitle="Managed" />
+            <StrategyItem icon="rocket_launch" iconBg="#8B5CF6" title="Emerging Tech" subtitle="Unicorns" isLast />
+          </Box>
+        </Box>
+
+        {/* Bottom CTAs */}
+        <Box px={4} mb={8}>
+          <Box
+            as="button" w="100%" bg={IOS.blue} color="white"
+            fontWeight="600" fontSize="17px" py="14px" borderRadius="14px"
+            textAlign="center" cursor="pointer" mb={3}
+            _active={{ bg: IOS.blueActive, transform: "scale(0.96)", opacity: 0.8 }}
+            transition="all 0.15s ease-out"
+            onClick={() => navigate("/discover-fund-a")}
+          >
+            Explore our Approach
+          </Box>
+
+          <Box
+            as="button" w="100%" bg={IOS.fillGray} color={IOS.blue}
+            fontWeight="600" fontSize="17px" py="14px" borderRadius="14px"
+            textAlign="center" cursor="pointer"
+            _active={{ bg: "#E5E5EA", transform: "scale(0.96)", opacity: 0.8 }}
+            transition="all 0.15s ease-out"
+            onClick={() => navigate("/investor-profile")}
+          >
+            Learn More
+          </Box>
+
+          <Text fontSize="11px" textAlign="center" color="rgba(60,60,67,0.6)" mt={6} px={4} lineHeight="13px">
+            *Past performance is not indicative of future results. Investment involves risk including possible loss of principal.
+          </Text>
         </Box>
       </Box>
-    </>
+
+      {/* ═══ Fixed Bottom Tab Bar ═══ */}
+      <Box
+        position="fixed" bottom={0} left={0} right={0}
+        bg="rgba(255,255,255,0.8)" backdropFilter="blur(20px)"
+        sx={{ WebkitBackdropFilter: "blur(20px)" }}
+        borderTop="0.5px solid rgba(0,0,0,0.1)"
+        pb="28px" pt={2} px={6} zIndex={40}
+      >
+        <Flex justify="space-between" align="center" maxW="393px" mx="auto">
+          <TabItem icon="home" label="Home" active />
+          <Box onClick={() => navigate("/hushh-user-profile")} cursor="pointer">
+            <TabItem icon="pie_chart" label="Portfolio" />
+          </Box>
+          <Box onClick={() => navigate("/discover-fund-a")} cursor="pointer">
+            <TabItem icon="swap_horiz" label="Trade" />
+          </Box>
+          <Box onClick={() => session ? navigate("/hushh-user-profile") : navigate("/login")} cursor="pointer">
+            <TabItem icon="person" label="Profile" />
+          </Box>
+        </Flex>
+      </Box>
+    </Box>
   );
 }

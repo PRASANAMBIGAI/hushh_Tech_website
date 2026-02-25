@@ -1,0 +1,399 @@
+/**
+ * Step 13 — Bank Details
+ * Premium Hushh design matching Step 1-11.
+ * Bank form, Plaid account selector, country overlay select.
+ * Logic stays in logic.ts — zero logic changes.
+ */
+import {
+  useStep13Logic,
+  SHARE_CLASSES,
+  COUNTRIES,
+  formatCurrency,
+} from './logic';
+import HushhTechBackHeader from '../../../components/hushh-tech-back-header/HushhTechBackHeader';
+import HushhTechCta, {
+  HushhTechCtaVariant,
+} from '../../../components/hushh-tech-cta/HushhTechCta';
+
+export default function OnboardingStep13() {
+  const {
+    loading,
+    pageLoading,
+    error,
+    autoFillMessage,
+    plaidAccounts,
+    selectedAccountIdx,
+    plaidInstitutionName,
+    bankName,
+    accountHolderName,
+    accountNumber,
+    confirmAccountNumber,
+    routingNumber,
+    bankCity,
+    bankCountry,
+    accountType,
+    formattedOnboardingAccountType,
+    touched,
+    shareUnits,
+    totalInvestment,
+    hasAnyUnits,
+    bankNameError,
+    accountHolderNameError,
+    accountNumberError,
+    confirmAccountNumberError,
+    bankCountryError,
+    routingNumberError,
+    isFormValid,
+    getUnits,
+    handleBlur,
+    handleBack,
+    handleSkip,
+    handleContinue,
+    setBankName,
+    setAccountHolderName,
+    setAccountNumber,
+    setConfirmAccountNumber,
+    setRoutingNumber,
+    setBankCity,
+    setBankCountry,
+    setAccountType,
+    setSelectedAccountIdx,
+    applyAccountSelection,
+    userModifiedFields,
+  } = useStep13Logic();
+
+  return (
+    <div className="bg-white text-gray-900 min-h-screen antialiased flex flex-col selection:bg-black selection:text-white">
+      {/* ═══ Header ═══ */}
+      <HushhTechBackHeader onBackClick={handleBack} rightLabel="FAQs" />
+
+      <main className="px-6 flex-grow max-w-md mx-auto w-full pb-48">
+        {/* ── Progress Bar ── */}
+        <div className="py-4">
+          <div className="flex justify-between text-[11px] font-semibold tracking-wide text-gray-500 mb-3 lowercase">
+            <span>step 12/12</span>
+            <span>100% complete</span>
+          </div>
+          <div className="h-0.5 w-full bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full bg-black w-full" />
+          </div>
+        </div>
+
+        {/* ── Title Section ── */}
+        <section className="py-8">
+          <h3 className="text-[11px] tracking-wide text-gray-500 lowercase mb-4 font-semibold">final step</h3>
+          <h1
+            className="text-[2.75rem] leading-[1.1] font-normal text-black tracking-tight lowercase"
+            style={{ fontFamily: "'Playfair Display', serif" }}
+          >
+            bank
+            <br />
+            <span className="text-gray-400 italic font-normal">details</span>
+          </h1>
+          <p className="text-sm text-gray-500 mt-4 leading-relaxed lowercase font-medium">
+            provide your banking information for investment transfers securely.
+          </p>
+        </section>
+
+        {/* ── Page Loading Shimmer ── */}
+        {pageLoading && (
+          <div className="space-y-4 animate-pulse">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-16 bg-gray-100 rounded-xl border-b border-gray-200" />
+            ))}
+            <p className="text-center text-xs text-gray-400 lowercase font-medium pt-4">loading your data...</p>
+          </div>
+        )}
+
+        {/* ── Form Content ── */}
+        {!pageLoading && (
+          <>
+            {/* Error */}
+            {error && (
+              <div className="mb-6 flex items-center gap-3 py-4 px-1 border-b border-red-100">
+                <div className="w-10 h-10 rounded-full bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-red-500 text-lg" style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}>error</span>
+                </div>
+                <p className="text-sm font-medium text-red-700 lowercase">{error}</p>
+              </div>
+            )}
+
+            {/* Plaid Auto-Fill Banner */}
+            {autoFillMessage && (
+              <div className="mb-6 flex items-center gap-3 py-4 px-1 border-b border-green-100">
+                <div className="w-10 h-10 rounded-full bg-green-50 border border-green-200 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-green-600 text-lg" style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}>check_circle</span>
+                </div>
+                <p className="text-sm font-medium text-green-700 lowercase">{autoFillMessage}</p>
+              </div>
+            )}
+
+            {/* Multi-Account Selector */}
+            {plaidAccounts.length > 1 && (
+              <section className="mb-6">
+                <div className="py-4">
+                  <h3 className="text-[11px] tracking-wide text-gray-500 lowercase font-semibold">
+                    {plaidInstitutionName ? `${plaidInstitutionName.toLowerCase()} — ` : ''}select account
+                  </h3>
+                </div>
+                <div className="space-y-2">
+                  {plaidAccounts.map((acct, idx) => {
+                    const isSelected = idx === selectedAccountIdx;
+                    return (
+                      <button
+                        key={acct.accountId || idx}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAccountIdx(idx);
+                          userModifiedFields.current.delete('accountNumber');
+                          userModifiedFields.current.delete('confirmAccountNumber');
+                          userModifiedFields.current.delete('routingNumber');
+                          userModifiedFields.current.delete('accountType');
+                          applyAccountSelection(acct);
+                        }}
+                        className={`w-full flex items-center gap-4 py-4 px-1 border-b transition-all text-left ${
+                          isSelected ? 'border-black' : 'border-gray-200'
+                        }`}
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isSelected ? 'bg-black' : 'bg-gray-100'}`}>
+                          <span className={`material-symbols-outlined text-lg ${isSelected ? 'text-white' : 'text-gray-400'}`} style={{ fontVariationSettings: "'wght' 400" }}>account_balance</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-semibold text-gray-900 lowercase block truncate">{acct.name.toLowerCase()}</span>
+                          <span className="text-xs text-gray-500 font-medium lowercase">{acct.subtype} · ····{acct.mask}</span>
+                        </div>
+                        {isSelected && (
+                          <span className="material-symbols-outlined text-black text-lg" style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}>check_circle</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Investment Amount Card */}
+            {hasAnyUnits && (
+              <section className="mb-8">
+                <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
+                  <div className="flex flex-col items-center text-center gap-2">
+                    <span className="text-[11px] tracking-wide text-gray-500 lowercase font-semibold">investment amount</span>
+                    <span className="text-3xl font-bold text-black tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
+                      {formatCurrency(totalInvestment)}
+                    </span>
+                    <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                      {SHARE_CLASSES.map((sc) => {
+                        const units = getUnits(sc.id);
+                        if (units === 0) return null;
+                        return (
+                          <span key={sc.id} className="px-2 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-600 border border-gray-200 lowercase">
+                            {sc.name.toLowerCase()} · {units}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* ── Banking Information ── */}
+            <section className="space-y-0 mb-6">
+              <div className="py-4">
+                <h3 className="text-[11px] tracking-wide text-gray-500 lowercase font-semibold">banking information</h3>
+              </div>
+
+              {/* Bank Name */}
+              <div className="py-5 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-gray-700 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>account_balance</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="text-sm font-semibold text-gray-900 lowercase block mb-1">bank name</label>
+                    <input
+                      type="text"
+                      value={bankName}
+                      onChange={(e) => { userModifiedFields.current.add('bankName'); setBankName(e.target.value); }}
+                      onBlur={() => handleBlur('bankName')}
+                      placeholder="enter bank name"
+                      className="w-full text-sm text-gray-700 font-medium bg-transparent border-none outline-none p-0 placeholder-gray-400 focus:ring-0 lowercase"
+                    />
+                  </div>
+                </div>
+                {touched.bankName && bankNameError && <p className="text-xs text-red-500 font-medium mt-2 pl-14 lowercase">{bankNameError}</p>}
+              </div>
+
+              {/* Account Holder Name */}
+              <div className="py-5 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-gray-700 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>person</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="text-sm font-semibold text-gray-900 lowercase block mb-1">account holder name</label>
+                    <input
+                      type="text"
+                      value={accountHolderName}
+                      onChange={(e) => setAccountHolderName(e.target.value)}
+                      onBlur={() => handleBlur('accountHolderName')}
+                      placeholder="as it appears on your account"
+                      className="w-full text-sm text-gray-700 font-medium bg-transparent border-none outline-none p-0 placeholder-gray-400 focus:ring-0 lowercase"
+                    />
+                  </div>
+                </div>
+                {touched.accountHolderName && accountHolderNameError && <p className="text-xs text-red-500 font-medium mt-2 pl-14 lowercase">{accountHolderNameError}</p>}
+              </div>
+
+              {/* Account Type */}
+              <div className="py-5 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-gray-700 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>credit_card</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-gray-900 lowercase block mb-1">account type</span>
+                    <span className="text-sm text-gray-700 font-medium lowercase">{formattedOnboardingAccountType.toLowerCase()}</span>
+                  </div>
+                  <span className="material-symbols-outlined text-gray-400 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>chevron_right</span>
+                </div>
+              </div>
+
+              {/* Country — overlay select */}
+              <div className="relative py-5 border-b border-gray-200 cursor-pointer">
+                <div className="flex items-center gap-4 pointer-events-none">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-gray-700 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>public</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-gray-900 lowercase block mb-1">country</span>
+                    <span className="text-sm text-gray-700 font-medium lowercase">
+                      {COUNTRIES.find(c => c.code === bankCountry)?.name.toLowerCase() || 'select country'}
+                    </span>
+                  </div>
+                  <span className="material-symbols-outlined text-gray-400 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>expand_more</span>
+                </div>
+                <select
+                  value={bankCountry}
+                  onChange={(e) => { userModifiedFields.current.add('bankCountry'); setBankCountry(e.target.value); handleBlur('bankCountry'); }}
+                  onBlur={() => handleBlur('bankCountry')}
+                  aria-label="Bank country"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                >
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code} disabled={c.code === ''}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </section>
+
+            {/* ── Account Details ── */}
+            <section className="space-y-0 mb-6">
+              <div className="py-4">
+                <h3 className="text-[11px] tracking-wide text-gray-500 lowercase font-semibold">account details</h3>
+              </div>
+
+              {/* Routing Number */}
+              <div className="py-5 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-gray-700 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>tag</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="text-sm font-semibold text-gray-900 lowercase block mb-1">routing number</label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      value={routingNumber}
+                      onChange={(e) => { userModifiedFields.current.add('routingNumber'); setRoutingNumber(e.target.value.replace(/\D/g, '').slice(0, bankCountry === 'US' ? 9 : 15)); }}
+                      onBlur={() => handleBlur('routingNumber')}
+                      placeholder={bankCountry === 'US' ? '9 digits' : 'enter routing number'}
+                      maxLength={bankCountry === 'US' ? 9 : 15}
+                      className="w-full text-sm text-gray-700 font-medium font-mono tracking-wider bg-transparent border-none outline-none p-0 placeholder-gray-400 focus:ring-0"
+                    />
+                  </div>
+                </div>
+                {touched.routingNumber && routingNumberError && <p className="text-xs text-red-500 font-medium mt-2 pl-14 lowercase">{routingNumberError}</p>}
+              </div>
+
+              {/* Account Number */}
+              <div className="py-5 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-gray-700 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>pin</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="text-sm font-semibold text-gray-900 lowercase block mb-1">account number</label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      value={accountNumber}
+                      onChange={(e) => { userModifiedFields.current.add('accountNumber'); setAccountNumber(e.target.value.replace(/\D/g, '')); }}
+                      onBlur={() => handleBlur('accountNumber')}
+                      placeholder="enter account number"
+                      className="w-full text-sm text-gray-700 font-medium font-mono tracking-wider bg-transparent border-none outline-none p-0 placeholder-gray-400 focus:ring-0"
+                    />
+                  </div>
+                </div>
+                {touched.accountNumber && accountNumberError && <p className="text-xs text-red-500 font-medium mt-2 pl-14 lowercase">{accountNumberError}</p>}
+              </div>
+
+              {/* Confirm Account Number */}
+              <div className="py-5 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-gray-700 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>verified</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="text-sm font-semibold text-gray-900 lowercase block mb-1">confirm account number</label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      value={confirmAccountNumber}
+                      onChange={(e) => { userModifiedFields.current.add('confirmAccountNumber'); setConfirmAccountNumber(e.target.value.replace(/\D/g, '')); }}
+                      onBlur={() => handleBlur('confirmAccountNumber')}
+                      placeholder="re-enter account number"
+                      className="w-full text-sm text-gray-700 font-medium font-mono tracking-wider bg-transparent border-none outline-none p-0 placeholder-gray-400 focus:ring-0"
+                    />
+                  </div>
+                </div>
+                {touched.confirmAccountNumber && confirmAccountNumberError && <p className="text-xs text-red-500 font-medium mt-2 pl-14 lowercase">{confirmAccountNumberError}</p>}
+              </div>
+
+              {/* Info note */}
+              <div className="flex items-start gap-3 py-4 px-1">
+                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-gray-500 text-lg" style={{ fontVariationSettings: "'wght' 400" }}>info</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed lowercase font-medium pt-2">
+                  routing number can be found on the bottom left of your check. ensure the holder name matches your id exactly.
+                </p>
+              </div>
+            </section>
+
+            {/* ── CTAs ── */}
+            <section className="pb-12 space-y-3">
+              <HushhTechCta variant={HushhTechCtaVariant.BLACK} onClick={handleContinue} disabled={loading || !isFormValid()}>
+                {loading ? 'Saving...' : 'Complete Setup'}
+              </HushhTechCta>
+              <HushhTechCta variant={HushhTechCtaVariant.WHITE} onClick={handleSkip}>
+                I'll Do This Later
+              </HushhTechCta>
+            </section>
+
+            {/* ── Trust Badge ── */}
+            <section className="flex flex-col items-center justify-center text-center gap-2 pb-8">
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px] text-gray-600">lock</span>
+                <span className="text-[10px] text-gray-600 tracking-wide uppercase font-medium">bank-level security</span>
+              </div>
+              <p className="text-[10px] text-gray-400 lowercase font-medium max-w-xs">
+                your data is encrypted with 256-bit ssl security
+              </p>
+            </section>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}

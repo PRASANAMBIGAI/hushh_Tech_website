@@ -22,6 +22,9 @@ export interface FinancialDataResponse {
   balance: ProductResult;
   assets: ProductResult;
   investments: ProductResult;
+  identity: ProductResult;
+  authNumbers: ProductResult;
+  identityMatch: ProductResult;
   summary: {
     products_available: number;
     products_total: number;
@@ -189,26 +192,85 @@ const fetchInvestments = async (accessToken: string, userId: string): Promise<Pr
   }
 };
 
-/** Fetch all 3 products in parallel */
+/** Fetch identity data (name, email, phone, address from bank) */
+const fetchIdentity = async (accessToken: string): Promise<ProductResult> => {
+  try {
+    const token = await getUserAccessToken();
+    const res = await fetch(`${SUPABASE_URL}/get-identity`, {
+      method: 'POST', headers: getHeaders(token),
+      body: JSON.stringify({ accessToken }),
+    });
+    if (!res.ok) {
+      if (res.status === 400) return { available: false, data: null, error: null, reason: 'not_supported' };
+      const err = await res.json().catch(() => ({}));
+      return { available: false, data: null, error: err.error || 'Failed', reason: 'error' };
+    }
+    return { available: true, data: await res.json(), error: null, reason: null };
+  } catch (e: any) {
+    return { available: false, data: null, error: e.message, reason: 'error' };
+  }
+};
+
+/** Match user identity against bank account owner data */
+export const fetchIdentityMatch = async (
+  accessToken: string,
+  userData?: { legal_name?: string; phone_number?: string; email_address?: string; address?: any },
+): Promise<ProductResult> => {
+  try {
+    const token = await getUserAccessToken();
+    const res = await fetch(`${SUPABASE_URL}/identity-match`, {
+      method: 'POST', headers: getHeaders(token),
+      body: JSON.stringify({ accessToken, ...userData }),
+    });
+    if (!res.ok) {
+      if (res.status === 400) return { available: false, data: null, error: null, reason: 'not_supported' };
+      const err = await res.json().catch(() => ({}));
+      return { available: false, data: null, error: err.error || 'Failed', reason: 'error' };
+    }
+    return { available: true, data: await res.json(), error: null, reason: null };
+  } catch (e: any) {
+    return { available: false, data: null, error: e.message, reason: 'error' };
+  }
+};
+
+/** Wrap fetchAuthNumbers as a ProductResult */
+const fetchAuth = async (accessToken: string): Promise<ProductResult> => {
+  try {
+    const data = await fetchAuthNumbers(accessToken);
+    if (!data) return { available: false, data: null, error: null, reason: 'not_supported' };
+    return { available: true, data, error: null, reason: null };
+  } catch (e: any) {
+    return { available: false, data: null, error: e.message, reason: 'error' };
+  }
+};
+
+/** Fetch all 6 products in parallel */
 export const fetchAllFinancialData = async (
   accessToken: string, userId: string,
 ): Promise<FinancialDataResponse> => {
-  const [b, a, i] = await Promise.allSettled([
+  const [b, a, i, id, auth, idMatch] = await Promise.allSettled([
     fetchBalance(accessToken, userId),
     fetchAssets(accessToken, userId),
     fetchInvestments(accessToken, userId),
+    fetchIdentity(accessToken),
+    fetchAuth(accessToken),
+    fetchIdentityMatch(accessToken),
   ]);
 
-  const balance = b.status === 'fulfilled' ? b.value : { available: false, data: null, error: 'Network error', reason: 'error' as const };
-  const assets = a.status === 'fulfilled' ? a.value : { available: false, data: null, error: 'Network error', reason: 'error' as const };
-  const investments = i.status === 'fulfilled' ? i.value : { available: false, data: null, error: 'Network error', reason: 'error' as const };
+  const errResult = { available: false, data: null, error: 'Network error', reason: 'error' as const };
+  const balance = b.status === 'fulfilled' ? b.value : errResult;
+  const assets = a.status === 'fulfilled' ? a.value : errResult;
+  const investments = i.status === 'fulfilled' ? i.value : errResult;
+  const identity = id.status === 'fulfilled' ? id.value : errResult;
+  const authNumbers = auth.status === 'fulfilled' ? auth.value : errResult;
+  const identityMatch = idMatch.status === 'fulfilled' ? idMatch.value : errResult;
 
-  const count = [balance, assets, investments].filter(r => r.available).length;
+  const count = [balance, assets, investments, identity, authNumbers, identityMatch].filter(r => r.available).length;
 
   return {
-    status: count === 3 ? 'complete' : count > 0 ? 'partial' : 'failed',
-    balance, assets, investments,
-    summary: { products_available: count, products_total: 3, can_proceed: count >= 1 },
+    status: count >= 4 ? 'complete' : count > 0 ? 'partial' : 'failed',
+    balance, assets, investments, identity, authNumbers, identityMatch,
+    summary: { products_available: count, products_total: 6, can_proceed: count >= 1 },
   };
 };
 
@@ -237,6 +299,9 @@ export const saveFinancialDataToSupabase = async (
     if (data.balance.error) errors.balance = data.balance.error;
     if (data.assets.error) errors.assets = data.assets.error;
     if (data.investments.error) errors.investments = data.investments.error;
+    if (data.identity?.error) errors.identity = data.identity.error;
+    if (data.authNumbers?.error) errors.auth = data.authNumbers.error;
+    if (data.identityMatch?.error) errors.identity_match = data.identityMatch.error;
 
     await supabase.from('user_financial_data').upsert({
       user_id: userId,
@@ -248,10 +313,16 @@ export const saveFinancialDataToSupabase = async (
       asset_report: data.assets.available ? data.assets.data : null,
       asset_report_token: data.assets.data?.asset_report_token || null,
       investments: data.investments.available ? data.investments.data : null,
+      identity_data: data.identity?.available ? data.identity.data : null,
+      auth_numbers: data.authNumbers?.available ? data.authNumbers.data : null,
+      identity_match: data.identityMatch?.available ? data.identityMatch.data : null,
       available_products: {
         balance: data.balance.available,
         assets: data.assets.available,
         investments: data.investments.available,
+        identity: data.identity?.available || false,
+        auth: data.authNumbers?.available || false,
+        identity_match: data.identityMatch?.available || false,
       },
       status: data.status,
       fetch_errors: Object.keys(errors).length > 0 ? errors : null,
@@ -289,6 +360,126 @@ export const getProductStatus = (product: ProductResult): ProductFetchStatus => 
   if (product.error) return 'error';
   if (product.data?.status === 'pending') return 'pending';
   return 'idle';
+};
+
+// =====================================================
+// Signal — ACH Transaction Risk Assessment
+// =====================================================
+
+/** Prepare an Item for Signal Transaction Scores (call after token exchange) */
+export const signalPrepare = async (accessToken: string) => {
+  try {
+    const token = await getUserAccessToken();
+    const res = await fetch(`${SUPABASE_URL}/signal-prepare`, {
+      method: 'POST', headers: getHeaders(token),
+      body: JSON.stringify({ accessToken }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn('[Plaid] Signal prepare failed:', err.error);
+      return { success: false, error: err.error };
+    }
+    console.log('[Plaid] ✅ Signal prepared for Item');
+    return { success: true, ...(await res.json()) };
+  } catch (e: any) {
+    console.warn('[Plaid] Signal prepare error:', e.message);
+    return { success: false, error: e.message };
+  }
+};
+
+/** Evaluate ACH transaction return risk */
+export const signalEvaluate = async (params: {
+  accessToken: string;
+  accountId: string;
+  clientTransactionId: string;
+  amount: number;
+  clientUserId?: string;
+  isRecurring?: boolean;
+  defaultPaymentMethod?: 'SAME_DAY_ACH' | 'STANDARD_ACH' | 'MULTIPLE_PAYMENT_METHODS';
+  rulesetKey?: string;
+  user?: { name?: { given_name?: string; family_name?: string }; phone_number?: string; email_address?: string; address?: any };
+  device?: { ip_address?: string; user_agent?: string };
+}) => {
+  const token = await getUserAccessToken();
+  const res = await fetch(`${SUPABASE_URL}/signal-evaluate`, {
+    method: 'POST', headers: getHeaders(token),
+    body: JSON.stringify({
+      accessToken: params.accessToken,
+      account_id: params.accountId,
+      client_transaction_id: params.clientTransactionId,
+      amount: params.amount,
+      client_user_id: params.clientUserId,
+      is_recurring: params.isRecurring,
+      default_payment_method: params.defaultPaymentMethod,
+      ruleset_key: params.rulesetKey,
+      user: params.user,
+      device: params.device,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Signal evaluate failed');
+  }
+  return res.json() as Promise<{
+    scores: {
+      customer_initiated_return_risk: { score: number; risk_tier: number };
+      bank_initiated_return_risk: { score: number; risk_tier: number };
+    };
+    core_attributes: Record<string, any>;
+    ruleset?: { ruleset_key: string; result: 'ACCEPT' | 'REROUTE' | 'REVIEW'; triggered_rule_details?: any };
+    warnings: any[];
+    request_id: string;
+  }>;
+};
+
+/** Report whether you initiated an ACH transaction */
+export const signalDecisionReport = async (params: {
+  clientTransactionId: string;
+  initiated: boolean;
+  decisionOutcome?: 'APPROVE' | 'REVIEW' | 'REJECT' | 'TAKE_OTHER_RISK_MEASURES' | 'NOT_EVALUATED';
+  paymentMethod?: 'SAME_DAY_ACH' | 'STANDARD_ACH' | 'MULTIPLE_PAYMENT_METHODS';
+  daysFundsOnHold?: number;
+  amountInstantlyAvailable?: number;
+}) => {
+  const token = await getUserAccessToken();
+  const res = await fetch(`${SUPABASE_URL}/signal-decision-report`, {
+    method: 'POST', headers: getHeaders(token),
+    body: JSON.stringify({
+      client_transaction_id: params.clientTransactionId,
+      initiated: params.initiated,
+      decision_outcome: params.decisionOutcome,
+      payment_method: params.paymentMethod,
+      days_funds_on_hold: params.daysFundsOnHold,
+      amount_instantly_available: params.amountInstantlyAvailable,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Signal decision report failed');
+  }
+  return res.json() as Promise<{ request_id: string }>;
+};
+
+/** Report a return for an ACH transaction */
+export const signalReturnReport = async (params: {
+  clientTransactionId: string;
+  returnCode: string;
+  returnedAt?: string;
+}) => {
+  const token = await getUserAccessToken();
+  const res = await fetch(`${SUPABASE_URL}/signal-return-report`, {
+    method: 'POST', headers: getHeaders(token),
+    body: JSON.stringify({
+      client_transaction_id: params.clientTransactionId,
+      return_code: params.returnCode,
+      returned_at: params.returnedAt,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Signal return report failed');
+  }
+  return res.json() as Promise<{ request_id: string }>;
 };
 
 // =====================================================

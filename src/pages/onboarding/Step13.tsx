@@ -116,6 +116,40 @@ const COUNTRIES = [
   { code: 'AE', name: 'United Arab Emirates' },
 ];
 
+// Plaid account from auth/get response
+interface PlaidAccount {
+  accountId: string;
+  name: string;
+  mask: string; // last 4 digits
+  subtype: string;
+  achAccount: string;
+  achRouting: string;
+}
+
+// Known Plaid sandbox test values — never auto-fill these in production
+const SANDBOX_TEST_ACCOUNTS = new Set([
+  '1111222233330000', '1111222233331111', '2222333344440000',
+  '3333444455550000', '6666777788880000', '0000000000000000',
+]);
+const SANDBOX_TEST_ROUTING = new Set([
+  '011401533', '021000021', '011000015', '054001725',
+]);
+
+// Validate Plaid-returned data before auto-filling
+const isValidPlaidAccountNumber = (value: string): boolean => {
+  if (!value || value.length < 4 || value.length > 17) return false;
+  if (!/^\d+$/.test(value)) return false;
+  if (SANDBOX_TEST_ACCOUNTS.has(value)) return false;
+  return true;
+};
+
+const isValidPlaidRoutingNumber = (value: string): boolean => {
+  if (!value || value.length !== 9) return false;
+  if (!/^\d+$/.test(value)) return false;
+  if (SANDBOX_TEST_ROUTING.has(value)) return false;
+  return true;
+};
+
 // Format currency for display
 const formatCurrency = (amount: number): string => {
   if (amount >= 1000000000) {
@@ -134,28 +168,20 @@ function OnboardingStep13() {
   const navigate = useNavigate();
   const isFooterVisible = useFooterVisibility();
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true); // Data fetch loading
   const [error, setError] = useState<string | null>(null);
   
-  // Plaid auto-fill status
+  // Plaid auto-fill status message (shown as banner)
   const [autoFillMessage, setAutoFillMessage] = useState<string | null>(null);
-  const [isAutoFilling, setIsAutoFilling] = useState(false);
 
-  // Fix 2: Timeout ref for cleanup on unmount
+  // Cleanup refs for async operations
   const autoFillTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
-  // Fix 1: Track which fields user has manually edited (prevents overwrite)
+  // Track which fields user has manually edited (prevents Plaid overwrite)
   const userModifiedFields = useRef(new Set<string>());
 
-  // Fix 3: Multiple accounts from Plaid
-  interface PlaidAccount {
-    accountId: string;
-    name: string;
-    mask: string; // last 4 digits
-    subtype: string;
-    achAccount: string;
-    achRouting: string;
-  }
+  // Plaid multi-account state
   const [plaidAccounts, setPlaidAccounts] = useState<PlaidAccount[]>([]);
   const [selectedAccountIdx, setSelectedAccountIdx] = useState(0);
   const [plaidInstitutionName, setPlaidInstitutionName] = useState('');
@@ -169,6 +195,7 @@ function OnboardingStep13() {
   const [bankCity, setBankCity] = useState('');
   const [bankCountry, setBankCountry] = useState('');
   const [accountType, setAccountType] = useState<'checking' | 'savings'>('checking');
+  const [selectedOnboardingAccountType, setSelectedOnboardingAccountType] = useState('');
   
   // Touched state for showing validation errors only after user interaction
   const [touched, setTouched] = useState({
@@ -204,7 +231,13 @@ function OnboardingStep13() {
   const totalInvestment = calculateTotalInvestment();
   const hasAnyUnits = shareUnits.class_a_units > 0 || shareUnits.class_b_units > 0 || shareUnits.class_c_units > 0;
 
-  // Fix 2: Cleanup on unmount - clear timeouts, mark unmounted
+  const formattedOnboardingAccountType = selectedOnboardingAccountType
+    ? selectedOnboardingAccountType
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    : 'Not selected';
+
+  // Cleanup on unmount — clear timeouts, mark unmounted
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -213,7 +246,7 @@ function OnboardingStep13() {
     };
   }, []);
 
-  // Fix 3: Apply selected account from multi-account picker
+  // Apply selected account from multi-account picker
   const applyAccountSelection = useCallback((account: PlaidAccount) => {
     if (!userModifiedFields.current.has('accountNumber')) {
       setAccountNumber(account.achAccount);
@@ -228,28 +261,190 @@ function OnboardingStep13() {
     }
   }, []);
 
+  // ─── Plaid Auto-Fill Logic ───
+  // Fetches ACH account/routing numbers from Plaid via the user's stored access_token.
+  // Validates data before auto-filling (rejects sandbox test values).
+  // If multiple accounts exist, shows picker instead of blindly selecting the first.
+  const attemptPlaidAutoFill = async (
+    userId: string,
+    dbHasBankName: boolean,
+    dbHasCountry: boolean,
+  ) => {
+    if (!config.supabaseClient) return;
+
+    try {
+      // 1. Check if user has a Plaid access token from the financial link step
+      const { data: financialData } = await config.supabaseClient
+        .from('user_financial_data')
+        .select('plaid_access_token, institution_name')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (!financialData?.plaid_access_token) return; // No linked bank — nothing to auto-fill
+      if (!isMountedRef.current) return;
+
+      setAutoFillMessage('🔍 Auto-filling from your linked bank...');
+      console.log('[Step13] Plaid access_token found, fetching auth numbers...');
+
+      // 2. Fetch ACH auth numbers from Plaid via Edge Function
+      const authData = await fetchAuthNumbers(financialData.plaid_access_token);
+      if (!isMountedRef.current) return;
+
+      // Handle expired/invalid access token
+      if (!authData) {
+        console.warn('[Step13] Plaid returned no auth data — token may be expired');
+        setAutoFillMessage('⚠️ Bank connection expired. Please enter details manually.');
+        autoFillTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) setAutoFillMessage(null);
+        }, 5000);
+        return;
+      }
+
+      const achNumbers = authData.numbers?.ach || [];
+      const accounts = authData.accounts || [];
+
+      // Handle no ACH accounts (bank doesn't support ACH)
+      if (achNumbers.length === 0) {
+        console.warn('[Step13] No ACH accounts returned from Plaid');
+        setAutoFillMessage('⚠️ Your bank does not support ACH. Please enter details manually.');
+        autoFillTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) setAutoFillMessage(null);
+        }, 5000);
+        return;
+      }
+
+      // 3. Map Plaid response to our PlaidAccount format
+      const mappedAccounts: PlaidAccount[] = achNumbers.map((ach: any) => {
+        const matched = accounts.find((a: any) => a.account_id === ach.account_id) as any;
+        return {
+          accountId: ach.account_id || '',
+          name: matched?.name || matched?.official_name || 'Account',
+          mask: matched?.mask || (ach.account ? ach.account.slice(-4) : '****'),
+          subtype: matched?.subtype || 'checking',
+          achAccount: ach.account || '',
+          achRouting: ach.routing || '',
+        };
+      });
+
+      // 4. Validate data — reject sandbox/test values
+      const hasAnySandboxData = mappedAccounts.some(
+        (acct) =>
+          SANDBOX_TEST_ACCOUNTS.has(acct.achAccount) ||
+          SANDBOX_TEST_ROUTING.has(acct.achRouting),
+      );
+
+      if (hasAnySandboxData) {
+        console.error('[Step13] 🚨 Sandbox test data detected — NOT auto-filling in production');
+        setAutoFillMessage('⚠️ Test bank data detected. Please enter your real bank details.');
+        autoFillTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) setAutoFillMessage(null);
+        }, 6000);
+        return;
+      }
+
+      // Filter out accounts with invalid data
+      const validAccounts = mappedAccounts.filter(
+        (acct) => isValidPlaidAccountNumber(acct.achAccount) && isValidPlaidRoutingNumber(acct.achRouting),
+      );
+
+      if (validAccounts.length === 0) {
+        console.warn('[Step13] No valid accounts after validation');
+        setAutoFillMessage('⚠️ Could not verify bank details. Please enter manually.');
+        autoFillTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) setAutoFillMessage(null);
+        }, 5000);
+        return;
+      }
+
+      // 5. Set accounts for picker UI
+      setPlaidAccounts(validAccounts);
+      if (financialData.institution_name) setPlaidInstitutionName(financialData.institution_name);
+
+      // 6. Auto-fill logic depends on number of accounts
+      if (validAccounts.length === 1) {
+        // Single account — auto-fill directly
+        const account = validAccounts[0];
+        setSelectedAccountIdx(0);
+
+        if (!userModifiedFields.current.has('accountNumber')) {
+          setAccountNumber(account.achAccount);
+          setConfirmAccountNumber(account.achAccount);
+        }
+        if (!userModifiedFields.current.has('routingNumber')) {
+          setRoutingNumber(account.achRouting);
+        }
+        if (!userModifiedFields.current.has('accountType')) {
+          const subtype = account.subtype as 'checking' | 'savings';
+          if (subtype === 'checking' || subtype === 'savings') setAccountType(subtype);
+        }
+
+        setAutoFillMessage('✅ Bank details auto-filled from Plaid');
+      } else {
+        // Multiple accounts — show picker, DON'T auto-select
+        // User must explicitly choose which account to use
+        setSelectedAccountIdx(-1); // -1 = nothing selected yet
+        setAutoFillMessage('👆 Select which bank account to use for wire transfers');
+      }
+
+      // Fill bank name & country only if not already set
+      if (financialData.institution_name && !dbHasBankName && !userModifiedFields.current.has('bankName')) {
+        setBankName(financialData.institution_name);
+      }
+      if (!dbHasCountry && !userModifiedFields.current.has('bankCountry')) {
+        setBankCountry('US'); // ACH = US-only
+      }
+
+      console.log('[Step13] Plaid auto-fill complete:', {
+        accountsFound: validAccounts.length,
+        institution: financialData.institution_name,
+      });
+
+      // Clear success message after delay
+      autoFillTimeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) setAutoFillMessage(null);
+      }, 5000);
+    } catch (err) {
+      console.error('[Step13] Plaid auto-fill failed:', err);
+      if (isMountedRef.current) {
+        setAutoFillMessage('⚠️ Could not auto-fill bank details. Please enter manually.');
+        autoFillTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) setAutoFillMessage(null);
+        }, 5000);
+      }
+    }
+  };
+
   // Load existing data
+  /* ─── Enable page-level scrolling ─── */
   useEffect(() => {
     window.scrollTo(0, 0);
+    document.documentElement.classList.add('onboarding-page-scroll');
+    document.body.classList.add('onboarding-page-scroll');
+    return () => {
+      document.documentElement.classList.remove('onboarding-page-scroll');
+      document.body.classList.remove('onboarding-page-scroll');
+    };
   }, []);
 
   useEffect(() => {
     const loadData = async () => {
-      if (!config.supabaseClient) return;
+      if (!config.supabaseClient) { setPageLoading(false); return; }
 
+      try {
       const { data: { user } } = await config.supabaseClient.auth.getUser();
-      if (!user) return;
+      if (!user) { setPageLoading(false); return; }
 
       const { data } = await config.supabaseClient
         .from('onboarding_data')
         .select(`
           class_a_units, class_b_units, class_c_units,
+          account_type,
           legal_first_name, legal_last_name,
           bank_name, bank_account_holder_name, bank_account_type,
           bank_routing_number, bank_address_city, bank_address_country
         `)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       // Track what DB already has so we know what's "pre-filled" vs "empty"
       let dbHasBankName = false;
@@ -269,92 +464,22 @@ function OnboardingStep13() {
         if (data.bank_name) { setBankName(data.bank_name); dbHasBankName = true; }
         if (data.bank_account_holder_name) setAccountHolderName(data.bank_account_holder_name);
         if (data.bank_account_type) setAccountType(data.bank_account_type as 'checking' | 'savings');
+        if (data.account_type) setSelectedOnboardingAccountType(String(data.account_type));
         if (data.bank_routing_number) setRoutingNumber(data.bank_routing_number);
         if (data.bank_address_city) setBankCity(data.bank_address_city);
         if (data.bank_address_country) { setBankCountry(data.bank_address_country); dbHasCountry = true; }
       }
 
-      // --- Plaid Auto-Fill: fetch auth numbers if user linked a bank ---
-      // Only auto-fill fields that are still empty (don't overwrite saved data)
+      // --- Plaid Auto-Fill ---
+      // Only attempt if user hasn't already saved bank data in a previous session
       const hasBankDataAlready = data?.bank_routing_number;
       if (!hasBankDataAlready) {
-        try {
-          const { data: financialData } = await config.supabaseClient
-            .from('user_financial_data')
-            .select('plaid_access_token, institution_name')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-          if (financialData?.plaid_access_token) {
-            if (!isMountedRef.current) return;
-            setIsAutoFilling(true);
-            setAutoFillMessage('ðŸ“ Auto-filling from your linked bank...');
-            console.log('[Step13] Plaid access_token found, fetching auth numbers...');
-
-            const authData = await fetchAuthNumbers(financialData.plaid_access_token);
-            if (!isMountedRef.current) return;
-
-            // Fix 3: Build multi-account list
-            const achNumbers = authData?.numbers?.ach || [];
-            const accounts = authData?.accounts || [];
-
-            if (achNumbers.length > 0) {
-              const mappedAccounts: PlaidAccount[] = achNumbers.map((ach: any) => {
-                const matchedAccount = accounts.find((a: any) => a.account_id === ach.account_id) as any;
-                return {
-                  accountId: ach.account_id || '',
-                  name: matchedAccount?.name || matchedAccount?.official_name || 'Account',
-                  mask: matchedAccount?.mask || (ach.account ? ach.account.slice(-4) : '****'),
-                  subtype: matchedAccount?.subtype || 'checking',
-                  achAccount: ach.account || '',
-                  achRouting: ach.routing || '',
-                };
-              });
-
-              setPlaidAccounts(mappedAccounts);
-              if (financialData.institution_name) setPlaidInstitutionName(financialData.institution_name);
-
-              // Auto-select first account - only fill fields user hasn't touched
-              const firstAccount = mappedAccounts[0];
-              setSelectedAccountIdx(0);
-
-              if (!userModifiedFields.current.has('accountNumber') && firstAccount.achAccount) {
-                setAccountNumber(firstAccount.achAccount);
-                setConfirmAccountNumber(firstAccount.achAccount);
-              }
-              if (!userModifiedFields.current.has('routingNumber') && firstAccount.achRouting) {
-                setRoutingNumber(firstAccount.achRouting);
-              }
-              if (!userModifiedFields.current.has('accountType')) {
-                const subtype = firstAccount.subtype as 'checking' | 'savings';
-                if (subtype === 'checking' || subtype === 'savings') setAccountType(subtype);
-              }
-            }
-
-            // Fill bank name & country only if not already set from DB or user
-            if (financialData.institution_name && !dbHasBankName && !userModifiedFields.current.has('bankName')) {
-              setBankName(financialData.institution_name);
-            }
-            if (!dbHasCountry && !userModifiedFields.current.has('bankCountry')) {
-              setBankCountry('US'); // ACH = US-only
-            }
-
-            setIsAutoFilling(false);
-            setAutoFillMessage('âœ… Bank details auto-filled from Plaid');
-            console.log('[Step13] Plaid auto-fill complete');
-
-            // Fix 2: Use ref for timeout cleanup
-            autoFillTimeoutRef.current = setTimeout(() => {
-              if (isMountedRef.current) setAutoFillMessage(null);
-            }, 4000);
-          }
-        } catch (err) {
-          console.warn('[Step13] Plaid auto-fill failed (non-blocking):', err);
-          if (isMountedRef.current) {
-            setAutoFillMessage(null);
-            setIsAutoFilling(false);
-          }
-        }
+        await attemptPlaidAutoFill(user.id, dbHasBankName, dbHasCountry);
+      }
+      } catch (err) {
+        console.error('[Step13] Error loading data:', err);
+      } finally {
+        setPageLoading(false);
       }
     };
 
@@ -482,6 +607,8 @@ function OnboardingStep13() {
       return;
     }
 
+    // ⚠️ NOTE: btoa() is base64 ENCODING, not encryption.
+    // TODO: Replace with server-side AES-256 encryption or Supabase Vault for production security.
     const encryptedAccountNumber = btoa(accountNumber);
 
     const { error: upsertError } = await upsertOnboardingData(user.id, {
@@ -547,40 +674,61 @@ function OnboardingStep13() {
   };
 
   return (
-    <div 
-      className="bg-slate-50 min-h-screen"
-      style={{ fontFamily: "'Manrope', sans-serif" }}
+    <div
+      className="bg-white min-h-[100dvh]"
+      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif", WebkitFontSmoothing: 'antialiased' }}
     >
-      <div className="onboarding-shell relative flex min-h-screen w-full flex-col bg-white max-w-[500px] mx-auto shadow-xl overflow-hidden border-x border-slate-100">
-        
-        {/* Sticky Header */}
-        <header className="flex items-center px-4 pt-4 pb-2 bg-white sticky top-0 z-10">
-          <button 
-            onClick={handleBack}
-            aria-label="Go back"
-            className="flex size-10 shrink-0 items-center justify-center text-slate-900 rounded-full hover:bg-slate-50 transition-colors"
-          >
-            <BackIcon />
-          </button>
-        </header>
+      {/* ═══ iOS Navigation Bar ═══ */}
+      <nav
+        className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#C6C6C8]/30 flex items-end justify-between px-4 pb-2"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 12px) + 4px)', minHeight: '48px' }}
+      >
+        <button onClick={handleBack} className="text-[#007AFF] flex items-center -ml-2 active:opacity-50 transition-opacity" aria-label="Go back">
+          <span className="material-symbols-outlined text-3xl -mr-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>chevron_left</span>
+          <span className="text-[17px] leading-none pb-[2px]">Back</span>
+        </button>
+        <span className="font-semibold text-[17px] text-black">Setup</span>
+        <button onClick={handleSkip} className="text-[17px] text-[#007AFF] font-normal active:opacity-50 transition-opacity">Skip</button>
+      </nav>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto pb-48 sm:pb-64">
-          {/* Header Section - 22px title, 14px subtitle, center aligned */}
-          <div className="px-5 pt-2 pb-6 flex flex-col items-center text-center">
-            {/* Bank Icon */}
-            <div className="mb-4 inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#2b8cee]/10">
-              <BankIcon />
-            </div>
-            
-            <h1 className="text-slate-900 text-[22px] font-extrabold leading-tight tracking-tight mb-2">
-              Wire Transfer Details
-            </h1>
-            <p className="text-slate-500 text-sm font-bold">
-              Provide your banking information for investment transfers
-            </p>
+      <main className="max-w-lg mx-auto w-full px-4 pt-2 pb-48">
+        {/* ─── Progress ─── */}
+        <div className="mb-6 mt-2">
+          <div className="flex justify-between items-end mb-2 px-1">
+            <span className="text-[13px] font-medium text-[#8E8E93] uppercase tracking-wide">Onboarding Progress</span>
+            <span className="text-[13px] text-[#8E8E93]">Step 12/12</span>
           </div>
+          <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full bg-[#007AFF] w-full rounded-full" />
+          </div>
+          <p className="mt-1.5 px-1 text-[12px] font-medium text-[#007AFF]">100% complete</p>
+        </div>
 
+        {/* ─── Title ─── */}
+        <h1 className="text-[34px] leading-tight font-bold text-black tracking-tight mb-2 px-1">Bank Details</h1>
+        <p className="text-[17px] leading-snug text-[#8E8E93] mb-8 px-1">
+          Provide your banking information for investment transfers securely.
+        </p>
+
+        {/* ─── Page Loading Shimmer ─── */}
+        {pageLoading && (
+          <div className="space-y-4 animate-pulse">
+            <div className="h-[120px] bg-gray-100 rounded-xl" />
+            <div className="space-y-0 rounded-[10px] overflow-hidden border border-gray-100">
+              {[1,2,3,4].map(i => <div key={i} className="h-[44px] bg-gray-50 border-b border-gray-100" />)}
+            </div>
+            <div className="space-y-0 rounded-[10px] overflow-hidden border border-gray-100">
+              {[1,2,3].map(i => <div key={i} className="h-[44px] bg-gray-50 border-b border-gray-100" />)}
+            </div>
+            <div className="flex justify-center pt-4">
+              <div className="w-10 h-10 border-4 border-gray-200 border-t-[#007AFF] rounded-full animate-spin" />
+            </div>
+            <p className="text-center text-[13px] text-[#8E8E93]">Loading your data...</p>
+          </div>
+        )}
+
+        {/* ─── Form Content (hidden while loading) ─── */}
+        {!pageLoading && <>
           {/* Error Message */}
           {error && (
             <div className="mx-5 mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
@@ -595,7 +743,7 @@ function OnboardingStep13() {
             </div>
           )}
 
-          {/* Fix 3: Multi-Account Selector - only shown if Plaid returned 2+ accounts */}
+          {/* Multi-Account Selector — shown when Plaid returns 2+ accounts */}
           {plaidAccounts.length > 1 && (
             <div className="mx-5 mb-5">
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -635,7 +783,7 @@ function OnboardingStep13() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-slate-900 truncate">{acct.name}</p>
                           <p className="text-xs text-slate-500">
-                            {acct.subtype.charAt(0).toUpperCase() + acct.subtype.slice(1)} Â· Â·Â·Â·Â·{acct.mask}
+                            {acct.subtype.charAt(0).toUpperCase() + acct.subtype.slice(1)} &middot; &bull;&bull;&bull;&bull;{acct.mask}
                           </p>
                         </div>
                         {/* Selected check */}
@@ -691,281 +839,157 @@ function OnboardingStep13() {
             </div>
           )}
 
-          {/* Form Fields */}
-          <div className="px-5 space-y-5">
-            {/* Bank Name */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-900">Bank Name*</label>
-              <input
-                type="text"
-                value={bankName}
-                onChange={(e) => { userModifiedFields.current.add('bankName'); setBankName(e.target.value); }}
-                onBlur={() => handleBlur('bankName')}
-                placeholder="e.g. Chase Bank"
-                className={`w-full rounded-xl border bg-white px-4 py-3.5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 transition-all ${
-                  touched.bankName && bankNameError
-                    ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
-                    : touched.bankName && !bankNameError
-                    ? 'border-green-400 focus:border-green-500 focus:ring-green-500'
-                    : 'border-slate-200 focus:border-[#2b8cee] focus:ring-[#2b8cee]'
-                }`}
-              />
-              {touched.bankName && bankNameError && (
-                <p className="text-red-500 text-xs font-medium">{bankNameError}</p>
-              )}
-              {touched.bankName && !bankNameError && bankName && (
-                <p className="text-green-600 text-xs font-medium">* Valid bank name</p>
-              )}
-            </div>
-
-            {/* Account Holder Name */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-900">Account Holder Name*</label>
-              <input
-                type="text"
-                value={accountHolderName}
-                onChange={(e) => setAccountHolderName(e.target.value)}
-                onBlur={() => handleBlur('accountHolderName')}
-                placeholder="e.g. John Doe"
-                className={`w-full rounded-xl border bg-white px-4 py-3.5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 transition-all ${
-                  touched.accountHolderName && accountHolderNameError
-                    ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
-                    : touched.accountHolderName && !accountHolderNameError
-                    ? 'border-green-400 focus:border-green-500 focus:ring-green-500'
-                    : 'border-slate-200 focus:border-[#2b8cee] focus:ring-[#2b8cee]'
-                }`}
-              />
-              {touched.accountHolderName && accountHolderNameError && (
-                <p className="text-red-500 text-xs font-medium">{accountHolderNameError}</p>
-              )}
-              {touched.accountHolderName && !accountHolderNameError && accountHolderName && (
-                <p className="text-green-600 text-xs font-medium">* Valid name</p>
-              )}
-            </div>
-
-            {/* Account Type */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-900">Account Type*</label>
-              <div className="flex rounded-xl bg-slate-100 p-1">
-                <button
-                  type="button"
-                  onClick={() => setAccountType('checking')}
-                  className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition-all ${
-                    accountType === 'checking'
-                      ? 'bg-white text-[#2b8cee] shadow-sm border border-slate-100'
-                      : 'bg-transparent text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  Checking
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountType('savings')}
-                  className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition-all ${
-                    accountType === 'savings'
-                      ? 'bg-white text-[#2b8cee] shadow-sm border border-slate-100'
-                      : 'bg-transparent text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  Savings
-                </button>
+          {/* ─── BANKING INFORMATION — iOS Grouped Table ─── */}
+          <div className="mb-8">
+            <div className="uppercase text-[13px] text-[#8E8E93] mb-2 px-4 font-normal">Banking Information</div>
+            <div className="bg-white rounded-[10px] overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.05)] divide-y divide-[#C6C6C8]/50">
+              {/* Bank Name */}
+              <div className="flex items-center min-h-[44px] px-4 active:bg-gray-100 transition-colors">
+                <label className="w-1/3 text-[17px] text-black py-3">Bank Name</label>
+                <input
+                  type="text"
+                  value={bankName}
+                  onChange={(e) => { userModifiedFields.current.add('bankName'); setBankName(e.target.value); }}
+                  onBlur={() => handleBlur('bankName')}
+                  placeholder="Required"
+                  className="w-2/3 bg-transparent border-none text-[17px] text-right text-black placeholder-[#8E8E93] focus:ring-0 p-0"
+                />
               </div>
-            </div>
-
-            {/* Account Number */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-900">Account Number*</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={accountNumber}
-                onChange={(e) => { userModifiedFields.current.add('accountNumber'); setAccountNumber(e.target.value.replace(/\D/g, '')); }}
-                onBlur={() => handleBlur('accountNumber')}
-                placeholder="000000000"
-                className={`w-full rounded-xl border bg-white px-4 py-3.5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 transition-all ${
-                  touched.accountNumber && accountNumberError
-                    ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
-                    : touched.accountNumber && !accountNumberError
-                    ? 'border-green-400 focus:border-green-500 focus:ring-green-500'
-                    : 'border-slate-200 focus:border-[#2b8cee] focus:ring-[#2b8cee]'
-                }`}
-              />
-              {touched.accountNumber && accountNumberError && (
-                <p className="text-red-500 text-xs font-medium">{accountNumberError}</p>
-              )}
-              {touched.accountNumber && !accountNumberError && accountNumber && (
-                <p className="text-green-600 text-xs font-medium">* Valid account number ({accountNumber.length} digits)</p>
-              )}
-            </div>
-
-            {/* Confirm Account Number */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-900">Confirm Account Number*</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={confirmAccountNumber}
-                onChange={(e) => { userModifiedFields.current.add('confirmAccountNumber'); setConfirmAccountNumber(e.target.value.replace(/\D/g, '')); }}
-                onBlur={() => handleBlur('confirmAccountNumber')}
-                placeholder="000000000"
-                className={`w-full rounded-xl border bg-white px-4 py-3.5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 transition-all ${
-                  touched.confirmAccountNumber && confirmAccountNumberError
-                    ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
-                    : touched.confirmAccountNumber && !confirmAccountNumberError
-                    ? 'border-green-400 focus:border-green-500 focus:ring-green-500'
-                    : 'border-slate-200 focus:border-[#2b8cee] focus:ring-[#2b8cee]'
-                }`}
-              />
-              {touched.confirmAccountNumber && confirmAccountNumberError && (
-                <p className="text-red-500 text-xs font-medium">{confirmAccountNumberError}</p>
-              )}
-              {touched.confirmAccountNumber && !confirmAccountNumberError && confirmAccountNumber && (
-                <p className="text-green-600 text-xs font-medium">* Account numbers match</p>
-              )}
-            </div>
-
-            {/* Bank Country */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-900">Bank Country*</label>
-              <div className="relative">
-                <select
-                  value={bankCountry}
-                  onChange={(e) => {
-                    userModifiedFields.current.add('bankCountry');
-                    setBankCountry(e.target.value);
-                    handleBlur('bankCountry');
-                  }}
-                  onBlur={() => handleBlur('bankCountry')}
-                  className={`w-full appearance-none rounded-xl border bg-white px-4 py-3.5 text-base font-medium text-slate-900 focus:outline-none focus:ring-1 transition-all ${
-                    touched.bankCountry && bankCountryError
-                      ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
-                      : touched.bankCountry && !bankCountryError
-                      ? 'border-green-400 focus:border-green-500 focus:ring-green-500'
-                      : 'border-slate-200 focus:border-[#2b8cee] focus:ring-[#2b8cee]'
-                  }`}
-                >
-                  {COUNTRIES.map((country) => (
-                    <option key={country.code} value={country.code} disabled={country.code === ''}>
-                      {country.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                  <ChevronDownIcon />
+              {/* Holder Name */}
+              <div className="flex items-center min-h-[44px] px-4 active:bg-gray-100 transition-colors">
+                <label className="w-1/3 text-[17px] text-black py-3 whitespace-nowrap">Holder Name</label>
+                <input
+                  type="text"
+                  value={accountHolderName}
+                  onChange={(e) => setAccountHolderName(e.target.value)}
+                  onBlur={() => handleBlur('accountHolderName')}
+                  placeholder="Required"
+                  className="w-2/3 bg-transparent border-none text-[17px] text-right text-black placeholder-[#8E8E93] focus:ring-0 p-0"
+                />
+              </div>
+              {/* Account Type */}
+              <div className="flex items-center justify-between min-h-[44px] px-4 cursor-pointer">
+                <label className="text-[17px] text-black py-3">Account Type</label>
+                <div className="flex items-center">
+                  <span className="text-[17px] text-[#8E8E93] mr-2">{formattedOnboardingAccountType}</span>
+                  <span className="material-symbols-outlined text-gray-400 text-lg">chevron_right</span>
                 </div>
               </div>
-              {touched.bankCountry && bankCountryError && (
-                <p className="text-red-500 text-xs font-medium">{bankCountryError}</p>
-              )}
-              {touched.bankCountry && !bankCountryError && bankCountry && (
-                <p className="text-green-600 text-xs font-medium">* Country selected</p>
-              )}
-            </div>
-
-            {/* Routing Number */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-900">Routing Number (ABA)*</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={routingNumber}
-                onChange={(e) => { userModifiedFields.current.add('routingNumber'); setRoutingNumber(e.target.value.replace(/\D/g, '').slice(0, bankCountry === 'US' ? 9 : 15)); }}
-                onBlur={() => handleBlur('routingNumber')}
-                placeholder={bankCountry === 'US' ? '000000000' : 'Enter routing number'}
-                maxLength={bankCountry === 'US' ? 9 : 15}
-                className={`w-full rounded-xl border bg-white px-4 py-3.5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 transition-all ${
-                  touched.routingNumber && routingNumberError
-                    ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
-                    : touched.routingNumber && !routingNumberError
-                    ? 'border-green-400 focus:border-green-500 focus:ring-green-500'
-                    : 'border-slate-200 focus:border-[#2b8cee] focus:ring-[#2b8cee]'
-                }`}
-              />
-              {touched.routingNumber && routingNumberError && (
-                <p className="text-red-500 text-xs font-medium">{routingNumberError}</p>
-              )}
-              {touched.routingNumber && !routingNumberError && routingNumber && (
-                <p className="text-green-600 text-xs font-medium">* Valid routing number ({routingNumber.length} digits)</p>
-              )}
-              {!touched.routingNumber && (
-                <p className="text-xs font-medium text-slate-500 pt-1 pl-1">
-                  {bankCountry === 'US' ? 'Must be exactly 9 digits (bottom left of your check)' : 'Usually 5-15 digits'}
-                </p>
-              )}
-            </div>
-
-            {/* Bank City (Optional) */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-900">
-                Bank City <span className="text-slate-400 font-medium">(Optional)</span>
-              </label>
-              <input
-                type="text"
-                value={bankCity}
-                onChange={(e) => setBankCity(e.target.value)}
-                placeholder="e.g. New York"
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:border-[#2b8cee] focus:outline-none focus:ring-1 focus:ring-[#2b8cee] transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Security Note */}
-          <div className="mx-5 mt-6 mb-8">
-            <div className="flex gap-4 rounded-xl bg-[#F0F7FF] p-4 border border-[#2b8cee]/20">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2b8cee]/10">
-                <LockIcon />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 mb-1">Bank-level Security</h3>
-                <p className="text-xs leading-relaxed text-slate-500">
-                  Your data is encrypted with 256-bit SSL security and sent securely to your bank.
-                </p>
+              {/* Country */}
+              <div className="flex items-center justify-between min-h-[44px] px-4 cursor-pointer relative">
+                <label className="text-[17px] text-black py-3">Country</label>
+                <div className="flex items-center">
+                  <select
+                    value={bankCountry}
+                    onChange={(e) => { userModifiedFields.current.add('bankCountry'); setBankCountry(e.target.value); handleBlur('bankCountry'); }}
+                    onBlur={() => handleBlur('bankCountry')}
+                    className="appearance-none bg-transparent border-none text-[17px] text-[#8E8E93] text-right focus:ring-0 p-0 pr-6 cursor-pointer"
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code} disabled={c.code === ''}>{c.name}</option>
+                    ))}
+                  </select>
+                  <span className="material-symbols-outlined text-gray-400 text-lg absolute right-4 pointer-events-none">chevron_right</span>
+                </div>
               </div>
             </div>
+            <p className="mt-2 px-4 text-[13px] text-[#8E8E93] leading-normal">Ensure the account holder name matches your ID exactly.</p>
+            {touched.bankName && bankNameError && <p className="mt-1 px-4 text-[13px] text-red-500">{bankNameError}</p>}
+            {touched.accountHolderName && accountHolderNameError && <p className="mt-1 px-4 text-[13px] text-red-500">{accountHolderNameError}</p>}
           </div>
+
+          {/* ─── ACCOUNT DETAILS — iOS Grouped Table ─── */}
+          <div className="mb-8">
+            <div className="uppercase text-[13px] text-[#8E8E93] mb-2 px-4 font-normal">Account Details</div>
+            <div className="bg-white rounded-[10px] overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.05)] divide-y divide-[#C6C6C8]/50">
+              {/* Routing # */}
+              <div className="flex items-center min-h-[44px] px-4 active:bg-gray-100 transition-colors">
+                <label className="w-1/3 text-[17px] text-black py-3">Routing #</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={routingNumber}
+                  onChange={(e) => { userModifiedFields.current.add('routingNumber'); setRoutingNumber(e.target.value.replace(/\D/g, '').slice(0, bankCountry === 'US' ? 9 : 15)); }}
+                  onBlur={() => handleBlur('routingNumber')}
+                  placeholder="9 digits"
+                  maxLength={bankCountry === 'US' ? 9 : 15}
+                  className="w-2/3 bg-transparent border-none text-[17px] text-right text-black placeholder-[#8E8E93] focus:ring-0 p-0 font-mono tracking-tight"
+                />
+              </div>
+              {/* Account # */}
+              <div className="flex items-center min-h-[44px] px-4 active:bg-gray-100 transition-colors">
+                <label className="w-1/3 text-[17px] text-black py-3">Account #</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={accountNumber}
+                  onChange={(e) => { userModifiedFields.current.add('accountNumber'); setAccountNumber(e.target.value.replace(/\D/g, '')); }}
+                  onBlur={() => handleBlur('accountNumber')}
+                  placeholder="Required"
+                  className="w-2/3 bg-transparent border-none text-[17px] text-right text-black placeholder-[#8E8E93] focus:ring-0 p-0 font-mono tracking-tight"
+                />
+              </div>
+              {/* Confirm # */}
+              <div className="flex items-center min-h-[44px] px-4 active:bg-gray-100 transition-colors">
+                <label className="w-1/3 text-[17px] text-black py-3">Confirm #</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={confirmAccountNumber}
+                  onChange={(e) => { userModifiedFields.current.add('confirmAccountNumber'); setConfirmAccountNumber(e.target.value.replace(/\D/g, '')); }}
+                  onBlur={() => handleBlur('confirmAccountNumber')}
+                  placeholder="Re-enter number"
+                  className="w-2/3 bg-transparent border-none text-[17px] text-right text-black placeholder-[#8E8E93] focus:ring-0 p-0 font-mono tracking-tight"
+                />
+              </div>
+            </div>
+            <p className="mt-2 px-4 text-[13px] text-[#8E8E93] leading-normal">Routing number can be found on the bottom left of your check.</p>
+            {touched.routingNumber && routingNumberError && <p className="mt-1 px-4 text-[13px] text-red-500">{routingNumberError}</p>}
+            {touched.accountNumber && accountNumberError && <p className="mt-1 px-4 text-[13px] text-red-500">{accountNumberError}</p>}
+            {touched.confirmAccountNumber && confirmAccountNumberError && <p className="mt-1 px-4 text-[13px] text-red-500">{confirmAccountNumberError}</p>}
+          </div>
+
+          {/* ─── Security Badge ─── */}
+          <div className="flex flex-col items-center justify-center mt-6 mb-8 opacity-80">
+            <div className="flex items-center space-x-1.5 text-[#8E8E93]">
+              <span className="material-symbols-outlined text-[16px]">lock</span>
+              <span className="text-[13px] font-medium">Bank-level Security</span>
+            </div>
+            <p className="text-[11px] text-[#8E8E93] mt-1 text-center max-w-xs">
+              Your data is encrypted with 256-bit SSL security.
+            </p>
+          </div>
+        </>}
         </main>
 
-        {/* Fixed Footer - matching Step3 pattern */}
+        {/* ═══ iOS Fixed Footer ═══ */}
         {!isFooterVisible && (
           <div
-            className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-[500px] mx-auto border-t border-slate-100 bg-white/90 backdrop-blur-md px-4 sm:px-6 pt-4 sm:pt-5 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-[0_-4px_20px_rgba(0,0,0,0.04)]"
+            className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-[#C6C6C8]/30 px-4 pt-3 z-50"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}
             data-onboarding-footer
           >
-            <div className="flex flex-col gap-3 sm:gap-4">
-              {/* Continue Button */}
-              <button
-                onClick={handleContinue}
-                disabled={loading || !isFormValid()}
-                data-onboarding-cta
-                className={`w-full h-11 sm:h-12 bg-[#2b8cee] hover:bg-[#2070c0] text-white font-semibold text-sm sm:text-base px-6 rounded-full shadow-md shadow-[#2b8cee]/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${
-                  loading || !isFormValid() ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {loading ? 'Saving...' : 'Continue'}
-                {!loading && <ArrowForwardIcon />}
-              </button>
-
-              {/* Skip Button */}
-              <button
-                onClick={handleSkip}
-                disabled={loading}
-                className="w-full text-center text-slate-500 hover:text-slate-900 text-sm font-semibold py-2 transition-colors"
-              >
+            <div className="max-w-lg mx-auto flex flex-col gap-3">
+              <div className="flex gap-4 h-[50px]">
+                <button onClick={handleBack} disabled={loading} className="flex-1 bg-gray-200 text-black font-semibold text-[17px] rounded-xl active:bg-gray-300 transition-colors">Back</button>
+                <button
+                  onClick={handleContinue}
+                  disabled={loading || !isFormValid()}
+                  data-onboarding-cta
+                  className={`flex-1 rounded-xl font-semibold text-[17px] flex items-center justify-center gap-1 active:scale-[0.98] transition-all shadow-lg shadow-blue-500/20 ${
+                    isFormValid() && !loading ? 'bg-[#007AFF] text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {loading ? 'Saving...' : 'Continue'}
+                  {!loading && <span className="material-symbols-outlined text-xl">arrow_forward</span>}
+                </button>
+              </div>
+              <button onClick={handleSkip} disabled={loading} className="text-[15px] font-medium text-[#8E8E93] active:text-[#007AFF] transition-colors text-center">
                 I'll do this later
-              </button>
-
-              {/* Back Button */}
-              <button
-                onClick={handleBack}
-                disabled={loading}
-                className="w-full text-center text-slate-400 hover:text-slate-900 text-sm font-semibold py-2 transition-colors"
-              >
-                Back
               </button>
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }

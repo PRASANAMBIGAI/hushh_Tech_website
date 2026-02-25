@@ -5,61 +5,16 @@ import { upsertOnboardingData } from '../../services/onboarding/upsertOnboarding
 import { useFooterVisibility } from '../../utils/useFooterVisibility';
 import { locationService, LocationData, COUNTRY_CODE_TO_NAME } from '../../services/location';
 import PermissionHelpModal from '../../components/PermissionHelpModal';
-import LocationPermissionModal from '../../components/LocationPermissionModal';
 
-// Back arrow icon
-const BackIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-);
+/* ═══════════════════════════════════════════════
+   CONSTANTS
+   ═══════════════════════════════════════════════ */
 
-// Chevron down icon for select
-const ChevronDownIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 9l6 6 6-6" />
-  </svg>
-);
+const CURRENT_STEP = 4;
+const TOTAL_STEPS = 12;
+const PROGRESS_PCT = Math.round((CURRENT_STEP / TOTAL_STEPS) * 100);
 
-// Status card icons
-const SpinnerIcon = () => (
-  <svg className="animate-spin h-5 w-5 text-blue-600" viewBox="0 0 24 24" fill="none">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-  </svg>
-);
-
-const CheckCircleIcon = ({ className }: { className?: string }) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-  </svg>
-);
-
-const AlertTriangleIcon = ({ className }: { className?: string }) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-    <line x1="12" y1="9" x2="12" y2="13"></line>
-    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-  </svg>
-);
-
-const AlertCircleIcon = ({ className }: { className?: string }) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <circle cx="12" cy="12" r="10"></circle>
-    <line x1="12" y1="8" x2="12" y2="12"></line>
-    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-  </svg>
-);
-
-const MapPinIcon = ({ className }: { className?: string }) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-    <circle cx="12" cy="10" r="3"></circle>
-  </svg>
-);
-
-// United States first, then all other countries alphabetically
+// United States first, then alphabetical
 const countries = [
   'United States',
   'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia',
@@ -86,8 +41,12 @@ const countries = [
   'Sudan', 'Suriname', 'Swaziland', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan',
   'Tanzania', 'Thailand', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan',
   'Tuvalu', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'Uruguay',
-  'Uzbekistan', 'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe'
+  'Uzbekistan', 'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe',
 ];
+
+/* ═══════════════════════════════════════════════
+   COMPONENT
+   ═══════════════════════════════════════════════ */
 
 export default function OnboardingStep4() {
   const navigate = useNavigate();
@@ -102,77 +61,55 @@ export default function OnboardingStep4() {
   const [locationDetected, setLocationDetected] = useState(false);
   const [userManuallyChanged, setUserManuallyChanged] = useState(false);
   const [locationStatus, setLocationStatus] = useState<'detecting' | 'success' | 'ip-success' | 'denied' | 'failed' | 'manual' | null>(null);
-  const [detectedLocation, setDetectedLocation] = useState<string>('');
+  const [detectedLocation, setDetectedLocation] = useState('');
   const [userConfirmedManual, setUserConfirmedManual] = useState(false);
   const [showPermissionHelp, setShowPermissionHelp] = useState(false);
   const [hasPreviousData, setHasPreviousData] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
 
-  // Continue button should only be enabled if:
-  // 1. Location has been detected (GPS success), OR
-  // 2. User has explicitly confirmed manual selection
   const canContinue = locationDetected || userConfirmedManual;
 
-  useEffect(() => {
-    // Scroll to top on component mount
-    window.scrollTo(0, 0);
-  }, []);
+  /* ─── Scroll to top ─── */
+  useEffect(() => { window.scrollTo(0, 0); }, []);
 
+  /* ─── Load user + existing data ─── */
   useEffect(() => {
     const getCurrentUser = async () => {
       if (!config.supabaseClient) return;
-      
+
       const { data: { user } } = await config.supabaseClient.auth.getUser();
-      if (!user) {
-        navigate('/login');
-        return;
-      }
+      if (!user) { navigate('/login'); return; }
       setUserId(user.id);
 
-      // Load existing data if any
       const { data: onboardingData } = await config.supabaseClient
         .from('onboarding_data')
-        // Select * to remain compatible across schema revisions (some environments removed gps_location_data).
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (onboardingData) {
-        // If user already has data, use it (but still detect fresh GPS)
         if (onboardingData.citizenship_country) {
           setCitizenshipCountry(onboardingData.citizenship_country);
-          setUserManuallyChanged(true); // User already has data, allow continue
-          setHasPreviousData(true); // Track that we loaded previous data
+          setUserManuallyChanged(true);
+          setHasPreviousData(true);
         }
         if (onboardingData.residence_country) {
           setResidenceCountry(onboardingData.residence_country);
         }
-
-        // NOTE: We no longer skip GPS detection even if cached.
-        // Always detect fresh GPS location in real-time every time user visits Step 6
       }
-
-      // Don't auto-detect location on page load - let user trigger it with button
-      // This gives better UX and higher permission grant rate
     };
-
     getCurrentUser();
-
-    // Cleanup
-    return () => {
-      locationService.cancel();
-    };
+    return () => { locationService.cancel(); };
   }, [navigate]);
 
-  // Show modal on first visit (no location status, no previous data)
+  // Show modal on first visit
   useEffect(() => {
     if (!locationStatus && !hasPreviousData && userId) {
       setShowLocationModal(true);
     }
   }, [userId, locationStatus, hasPreviousData]);
 
-  // Location detection function using location service
-  // Tries GPS first, then falls back to IP-based geolocation
+  /* ─── Location detection ─── */
   const detectLocation = async (uid: string) => {
     setIsDetectingLocation(true);
     setLocationStatus('detecting');
@@ -180,11 +117,8 @@ export default function OnboardingStep4() {
     try {
       const result = await locationService.detectLocation();
 
-      // GPS-based detection succeeded
-      if (result.source === 'detected' && result.data) {
+      if ((result.source === 'detected' || result.source === 'ip-detected') && result.data) {
         const locationData: LocationData = result.data;
-        console.log('[Step4] GPS location detected:', locationData);
-
         const countryName = COUNTRY_CODE_TO_NAME[locationData.countryCode] || locationData.country;
 
         if (countries.includes(countryName)) {
@@ -192,86 +126,39 @@ export default function OnboardingStep4() {
           setResidenceCountry(countryName);
         }
 
-        const locationText = locationData.city || locationData.state || countryName;
-        setDetectedLocation(locationText);
+        setDetectedLocation(locationData.city || locationData.state || countryName);
         setLocationDetected(true);
-        setLocationStatus('success');
+        setLocationStatus(result.source === 'detected' ? 'success' : 'ip-success');
         setHasPreviousData(false);
 
-        // Save location data for later steps
-        try {
-          await locationService.saveLocationToOnboarding(uid, locationData);
-        } catch (saveErr) {
-          // Location detection succeeded; caching is best-effort.
-          console.warn('[Step4] Failed to cache location:', saveErr);
-        }
-
-      // IP-based detection succeeded (GPS was unavailable/denied but IP worked)
-      } else if (result.source === 'ip-detected' && result.data) {
-        const locationData: LocationData = result.data;
-        console.log('[Step4] IP-based location detected:', locationData);
-
-        const countryName = COUNTRY_CODE_TO_NAME[locationData.countryCode] || locationData.country;
-
-        if (countries.includes(countryName)) {
-          setCitizenshipCountry(countryName);
-          setResidenceCountry(countryName);
-        }
-
-        const locationText = locationData.city || locationData.state || countryName;
-        setDetectedLocation(locationText);
-        setLocationDetected(true);
-        setLocationStatus('ip-success');
-        setHasPreviousData(false);
-
-        // Save IP location data for later steps
-        try {
-          await locationService.saveLocationToOnboarding(uid, locationData);
-        } catch (saveErr) {
-          // Location detection succeeded; caching is best-effort.
-          console.warn('[Step4] Failed to cache IP location:', saveErr);
-        }
-
-      // Both GPS and IP failed with explicit denial
+        try { await locationService.saveLocationToOnboarding(uid, locationData); }
+        catch (e) { console.warn('[Step4] Cache failed:', e); }
       } else if (result.source === 'denied') {
-        console.log('[Step4] Location permission denied, IP also failed');
         setLocationStatus('denied');
-
-      // Everything failed
       } else {
-        console.log('[Step4] All location detection failed:', result.error);
         setLocationStatus('failed');
       }
     } catch (error) {
-      console.error('[Step4] Location detection error:', error);
+      console.error('[Step4] Location error:', error);
       setLocationStatus('failed');
     } finally {
       setIsDetectingLocation(false);
     }
   };
 
-  // Handle manual country change
+  /* ─── Handlers ─── */
   const handleCitizenshipChange = (value: string) => {
     setCitizenshipCountry(value);
     setUserManuallyChanged(true);
-    // Reset confirmation when user changes selection
-    if (userConfirmedManual) {
-      setUserConfirmedManual(false);
-      setLocationStatus('manual');
-    }
+    if (userConfirmedManual) { setUserConfirmedManual(false); setLocationStatus('manual'); }
   };
 
   const handleResidenceChange = (value: string) => {
     setResidenceCountry(value);
     setUserManuallyChanged(true);
-    // Reset confirmation when user changes selection
-    if (userConfirmedManual) {
-      setUserConfirmedManual(false);
-      setLocationStatus('manual');
-    }
+    if (userConfirmedManual) { setUserConfirmedManual(false); setLocationStatus('manual'); }
   };
 
-  // Handle manual selection confirmation
   const handleConfirmManualSelection = () => {
     if (citizenshipCountry && residenceCountry) {
       setUserConfirmedManual(true);
@@ -279,45 +166,28 @@ export default function OnboardingStep4() {
     }
   };
 
-  // Handle retry GPS detection
   const handleRetry = async () => {
     setLocationDetected(false);
     setUserManuallyChanged(false);
     setUserConfirmedManual(false);
-    setLocationStatus('detecting');
-
-    if (userId) {
-      await detectLocation(userId);
-    }
+    if (userId) await detectLocation(userId);
   };
 
-  // Handle permission help modal
-  const handleShowPermissionHelp = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setShowPermissionHelp(true);
-  };
-
-  // Handle user clicking "Detect My Location" button
-  const handleDetectLocation = async () => {
+  // iOS Alert: "Allow Once" or "Allow While Using App"
+  const handleAllowLocation = async () => {
     if (!userId) return;
-
-    // Close modal first
     setShowLocationModal(false);
-
-    // Then trigger GPS detection (will show browser permission popup)
     await detectLocation(userId);
   };
 
-  // Handle user skipping location detection
-  const handleSkipDetection = () => {
-    // Close modal and show manual selection
+  // iOS Alert: "Don't Allow"
+  const handleDontAllow = () => {
     setShowLocationModal(false);
     setLocationStatus('manual');
   };
 
   const handleContinue = async () => {
     if (!userId || !config.supabaseClient || !canContinue) return;
-
     setIsLoading(true);
     try {
       await upsertOnboardingData(userId, {
@@ -325,7 +195,6 @@ export default function OnboardingStep4() {
         residence_country: residenceCountry,
         current_step: 4,
       });
-
       navigate('/onboarding/step-5');
     } catch (error) {
       console.error('Error:', error);
@@ -334,320 +203,269 @@ export default function OnboardingStep4() {
     }
   };
 
-  const handleBack = () => {
-    navigate('/onboarding/step-2');
-  };
+  const handleBack = () => navigate('/onboarding/step-2');
+  const handleSkip = () => navigate('/onboarding/step-5');
 
-  // Get button text based on state
-  const getButtonText = () => {
-    if (isLoading) return 'Saving...';
-    if (isDetectingLocation) return 'Detecting location...';
-    return 'Continue';
-  };
+  const isErrorStatus = locationStatus === 'denied' || locationStatus === 'failed';
+  const isSuccessStatus = locationStatus === 'success' || locationStatus === 'ip-success';
+  const shouldShowForm = Boolean(locationStatus || hasPreviousData);
+  const canConfirmSelection = Boolean(citizenshipCountry && residenceCountry && !userConfirmedManual);
 
-  // Helper functions for status card
-  const getStatusCardStyle = (status: typeof locationStatus) => {
-    switch (status) {
-      case 'detecting':
-        return 'bg-blue-50 border-blue-200';
-      case 'success':
-        return 'bg-green-50 border-green-200';
-      case 'ip-success':
-        return 'bg-green-50 border-green-200';
-      case 'denied':
-        return 'bg-amber-50 border-amber-200';
-      case 'failed':
-        return 'bg-red-50 border-red-200';
-      case 'manual':
-        return 'bg-slate-50 border-slate-200';
-      default:
-        return 'bg-white border-gray-200';
-    }
-  };
-
-  const getStatusTitle = (status: typeof locationStatus) => {
-    switch (status) {
-      case 'detecting':
-        return 'Detecting your location...';
-      case 'success':
-        return `Location detected: ${detectedLocation}`;
-      case 'ip-success':
-        return `Location detected: ${detectedLocation}`;
-      case 'denied':
-        return 'Location access denied';
-      case 'failed':
-        return 'Could not detect location';
-      case 'manual':
-        return 'Manual selection confirmed';
-      default:
-        return '';
-    }
-  };
-
-  const getStatusMessage = (status: typeof locationStatus) => {
-    switch (status) {
-      case 'detecting':
-        return "We're detecting your location to pre-fill your country...";
-      case 'success':
-        return "We've automatically filled in your country based on your GPS location. You can change it if needed.";
-      case 'ip-success':
-        return "We've detected your approximate location based on your network. You can change it if needed.";
-      case 'denied':
-        return 'Location access was not available. Please select your country manually below.';
-      case 'failed':
-        return "We couldn't determine your location. Please select your country manually below.";
-      case 'manual':
-        return "You've manually selected your country. Click Continue to proceed.";
-      default:
-        return '';
-    }
-  };
-
+  /* ═══════════════════════════════════════════════
+     RENDER
+     ═══════════════════════════════════════════════ */
   return (
-    <div 
-      className="bg-slate-50 min-h-screen"
-      style={{ fontFamily: "'Manrope', sans-serif" }}
+    <div
+      className="bg-white min-h-[100dvh] flex flex-col relative overflow-hidden"
+      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif", WebkitFontSmoothing: 'antialiased' }}
     >
-      <div className="onboarding-shell relative flex min-h-screen w-full flex-col bg-white max-w-[500px] mx-auto shadow-xl overflow-hidden border-x border-slate-100">
-        
-        {/* Sticky Header */}
-        <header className="flex items-center px-4 pt-4 pb-2 bg-white sticky top-0 z-10">
-          <button 
-            onClick={handleBack}
-            aria-label="Go back"
-            className="flex size-10 shrink-0 items-center justify-center text-slate-900 rounded-full hover:bg-slate-50 transition-colors"
-          >
-            <BackIcon />
+      {/* ═══ Background layer (blurs when modal is open) ═══ */}
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${showLocationModal ? 'scale-[0.98] blur-[2px] opacity-60' : ''}`}>
+        {/* ═══ iOS Navigation Bar ═══ */}
+        <nav
+          className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-[#C6C6C8]/30 flex items-end justify-between px-4 pb-2"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 12px) + 4px)', minHeight: '48px' }}
+        >
+          <button onClick={handleBack} className="text-[#007AFF] flex items-center -ml-2 active:opacity-50 transition-opacity" aria-label="Go back">
+            <span className="material-symbols-outlined text-3xl -mr-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>
+              chevron_left
+            </span>
+            <span className="text-[17px] leading-none pb-[2px]">Back</span>
           </button>
-        </header>
+            <h1 className="text-[17px] font-semibold text-black absolute left-1/2 transform -translate-x-1/2">
+              Setup
+            </h1>
+          <button onClick={handleSkip} className="text-[#007AFF] font-medium text-[17px]">Skip</button>
+        </nav>
 
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col px-4 sm:px-6 pb-40 sm:pb-44">
-          {/* Header Section */}
-          <div className="mb-8 text-center">
-            <h1 className="text-slate-900 text-[22px] font-bold leading-tight tracking-tight mb-3">
+        <main className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 pt-4 pb-52">
+          {/* ─── Progress Bar ─── */}
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[13px] font-medium text-[#8E8E93] uppercase tracking-wide">Onboarding Progress</span>
+              <span className="text-[13px] text-[#8E8E93]">Step {CURRENT_STEP}/{TOTAL_STEPS}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+              <div className="bg-[#007AFF] h-1 rounded-full transition-all duration-500" style={{ width: `${PROGRESS_PCT}%` }} />
+            </div>
+            <p className="mt-2 text-[13px] font-medium text-[#007AFF]">{PROGRESS_PCT}% complete</p>
+          </div>
+
+          {/* ─── Title ─── */}
+            <h1 className="text-[34px] leading-[41px] font-bold text-black mb-2 tracking-tight">
               Confirm your residence
             </h1>
-            <p className="text-slate-500 text-[14px] font-normal leading-relaxed">
-              We need to know where you live and pay taxes to open your investment account.
-            </p>
+          <p className="text-[17px] text-[#8E8E93] mb-8 leading-snug">
+            We need to know where you live and pay taxes to open your investment account.
+          </p>
 
-            {/* Persistent Location Status Card */}
-            {locationStatus && (
-              <div className={`mt-4 rounded-2xl border p-4 ${getStatusCardStyle(locationStatus)}`}>
-                <div className="flex items-start gap-3">
-                  {/* Icon based on status */}
-                  <div className="flex-shrink-0 mt-0.5">
-                    {locationStatus === 'detecting' && <SpinnerIcon />}
-                    {locationStatus === 'success' && <CheckCircleIcon className="text-green-600" />}
-                    {locationStatus === 'ip-success' && <CheckCircleIcon className="text-green-600" />}
-                    {locationStatus === 'denied' && <AlertTriangleIcon className="text-amber-600" />}
-                    {locationStatus === 'failed' && <AlertCircleIcon className="text-red-600" />}
-                    {locationStatus === 'manual' && <MapPinIcon className="text-blue-600" />}
-                  </div>
-
-                  {/* Status Message */}
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold mb-1 text-slate-900">
-                      {getStatusTitle(locationStatus)}
-                    </p>
-                    <p className="text-xs text-slate-600">
-                      {getStatusMessage(locationStatus)}
-                    </p>
-
-                    {/* Action Links */}
-                    {locationStatus === 'denied' && (
-                      <div className="mt-3 flex gap-3">
-                        <button
-                          onClick={handleRetry}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-                        >
-                          Try Again
-                        </button>
-                        <button
-                          onClick={handleShowPermissionHelp}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-                        >
-                          How to Enable Location \u2192
-                        </button>
-                      </div>
-                    )}
-
-                    {locationStatus === 'failed' && (
-                      <button
-                        onClick={handleRetry}
-                        className="mt-3 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-                      >
-                        Retry Detection
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Only show form card if user has taken action */}
-          {(locationStatus || hasPreviousData) && (
-            <>
-              {/* Previous Data Info - Show when GPS denied/failed but we have old data */}
-              {hasPreviousData && (locationStatus === 'denied' || locationStatus === 'failed') && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2.5">
-              <svg
-                className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="16" x2="12" y2="12"></line>
-                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-              </svg>
-              <div className="flex-1">
-                <p className="text-xs text-blue-900">
-                  <span className="font-semibold">Using your previously selected country.</span>
-                  {' '}You can change it if needed below.
-                  {locationStatus === 'denied' && ' Or enable location access to detect automatically.'}
-                </p>
-              </div>
+          {/* ─── Status Banners ─── */}
+          {locationStatus === 'detecting' && (
+            <div className="flex items-center gap-3 p-3 mb-4 bg-blue-50 rounded-xl border border-blue-100">
+              <div className="animate-spin h-5 w-5 border-2 border-[#007AFF] border-t-transparent rounded-full shrink-0" />
+              <p className="text-sm font-medium text-[#007AFF]">Detecting your location...</p>
             </div>
           )}
 
-          {/* Carded Form Block */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-6 mb-8">
-            {/* Country of Citizenship */}
-            <div className="mb-6 relative">
-              <label className="block text-slate-900 text-sm font-medium leading-normal mb-2 ml-1">
-                Country of citizenship
-              </label>
-              <div className="relative">
-                <select
-                  value={citizenshipCountry}
-                  onChange={(e) => handleCitizenshipChange(e.target.value)}
-                  disabled={isDetectingLocation}
-                  className={`w-full bg-white text-slate-900 border rounded-xl h-14 px-4 pr-10 text-base font-normal focus:outline-none focus:ring-1 transition-all cursor-pointer appearance-none ${
-                    isDetectingLocation
-                      ? 'disabled:bg-slate-50 disabled:cursor-wait border-gray-200'
-                      : (locationStatus === 'denied' || locationStatus === 'failed') && !userManuallyChanged
-                        ? 'border-amber-400 ring-2 ring-amber-200 animate-pulse-slow'
-                        : 'border-gray-200 focus:border-[#2b8cee] focus:ring-[#2b8cee]'
-                  }`}
+          {isSuccessStatus && (
+            <div className="flex items-start gap-3 p-4 mb-8 bg-green-50 rounded-xl">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white">
+                <span className="material-symbols-outlined text-sm font-bold" style={{ fontVariationSettings: "'FILL' 1, 'wght' 700", fontSize: '14px' }}>check</span>
+              </div>
+              <p className="text-[15px] leading-snug text-black">
+                <span className="font-semibold">Location detected:</span> {detectedLocation}
+              </p>
+            </div>
+          )}
+
+          {isErrorStatus && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-red-500 text-xl" style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}>error</span>
+                  <p className="text-sm font-medium text-red-700">
+                    {locationStatus === 'denied' ? 'Location access denied' : 'Could not detect location'}
+                  </p>
+                </div>
+                <button onClick={handleRetry} className="text-[#007AFF] text-sm font-semibold shrink-0">Retry</button>
+              </div>
+              {locationStatus === 'denied' && (
+                <button
+                  onClick={(e) => { e.preventDefault(); setShowPermissionHelp(true); }}
+                  className="mt-2 ml-1 text-xs font-semibold text-[#007AFF]"
                 >
-                  <option disabled value="">Select country</option>
-                  {countries.map((country) => (
-                    <option key={country} value={country}>{country}</option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
-                  <ChevronDownIcon />
+                  How to enable location
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ─── Country Selection — iOS Separated Rows ─── */}
+          {shouldShowForm && (
+            <div className="space-y-8">
+              {/* Citizenship */}
+              <div className="space-y-2">
+                <span className="px-4 text-[13px] uppercase text-[#8E8E93] font-normal">
+                  Country of Citizenship
+                </span>
+                <div className="bg-white rounded-xl overflow-hidden border border-[#C6C6C8]/50">
+                  <label className="flex items-center justify-between pl-4 pr-3 py-3 cursor-pointer active:bg-gray-100 transition-colors relative">
+                    <span className="text-[17px] text-black">{citizenshipCountry || 'Select country'}</span>
+                    <span className="material-symbols-outlined text-gray-400" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>chevron_right</span>
+                    <select
+                      value={citizenshipCountry}
+                      onChange={(e) => handleCitizenshipChange(e.target.value)}
+                      disabled={isDetectingLocation}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    >
+                      <option disabled value="">Select country</option>
+                      {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </label>
                 </div>
               </div>
-            </div>
 
-            {/* Country of Residence */}
-            <div className="relative">
-              <label className="block text-slate-900 text-sm font-medium leading-normal mb-2 ml-1">
-                Country of residence
-              </label>
-              <div className="relative">
-                <select
-                  value={residenceCountry}
-                  onChange={(e) => handleResidenceChange(e.target.value)}
-                  disabled={isDetectingLocation}
-                  className={`w-full bg-white text-slate-900 border rounded-xl h-14 px-4 pr-10 text-base font-normal focus:outline-none focus:ring-1 transition-all cursor-pointer appearance-none ${
-                    isDetectingLocation
-                      ? 'disabled:bg-slate-50 disabled:cursor-wait border-gray-200'
-                      : (locationStatus === 'denied' || locationStatus === 'failed') && !userManuallyChanged
-                        ? 'border-amber-400 ring-2 ring-amber-200 animate-pulse-slow'
-                        : 'border-gray-200 focus:border-[#2b8cee] focus:ring-[#2b8cee]'
-                  }`}
-                >
-                  <option disabled value="">Select country</option>
-                  {countries.map((country) => (
-                    <option key={country} value={country}>{country}</option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
-                  <ChevronDownIcon />
+              {/* Residence */}
+              <div className="space-y-2">
+                <span className="px-4 text-[13px] uppercase text-[#8E8E93] font-normal">
+                  Country of Residence
+                </span>
+                <div className="bg-white rounded-xl overflow-hidden border border-[#C6C6C8]/50">
+                  <label className="flex items-center justify-between pl-4 pr-3 py-3 cursor-pointer active:bg-gray-100 transition-colors relative">
+                    <span className="text-[17px] text-black">{residenceCountry || 'Select country'}</span>
+                    <span className="material-symbols-outlined text-gray-400" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>chevron_right</span>
+                    <select
+                      value={residenceCountry}
+                      onChange={(e) => handleResidenceChange(e.target.value)}
+                      disabled={isDetectingLocation}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    >
+                      <option disabled value="">Select country</option>
+                      {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </label>
                 </div>
               </div>
-            </div>
 
-            {/* Manual Selection Confirmation */}
-            {userManuallyChanged && !userConfirmedManual && !locationDetected && (
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                <p className="text-sm text-slate-700 mb-3">
-                  Ready to proceed with your selected country?
-                </p>
+              {/* Confirm manual selection (hidden button — auto-confirms on select) */}
+              {!locationDetected && canConfirmSelection && !userConfirmedManual && (
                 <button
                   onClick={handleConfirmManualSelection}
-                  disabled={!citizenshipCountry || !residenceCountry}
-                  className="w-full py-3 px-4 bg-[#2b8cee] text-white rounded-lg font-semibold hover:bg-[#2070c0] disabled:bg-slate-300 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
+                  className="w-full py-2.5 rounded-xl bg-[#007AFF]/10 text-[#007AFF] font-semibold text-[15px] active:scale-[0.98] transition-all"
                 >
-                  Confirm My Country Selection
+                  Confirm Selection
                 </button>
-              </div>
-            )}
-          </div>
-            </>
+              )}
+            </div>
+          )}
+
+          {/* ─── Detect Location Button (when no modal) ─── */}
+          {!showLocationModal && !isDetectingLocation && !isSuccessStatus && (
+            <button
+              onClick={() => userId && detectLocation(userId)}
+              className="w-full py-3 rounded-xl border border-[#007AFF]/20 bg-blue-50 text-[#007AFF] font-semibold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+            >
+              <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>my_location</span>
+              Detect My Location
+            </button>
           )}
         </main>
+      </div>
 
-        {/* Fixed Footer - Hidden when main footer is visible */}
-        {!isFooterVisible && (
+      {/* ═══ Dark Overlay ═══ */}
+      {showLocationModal && (
+        <div className="absolute inset-0 z-40 bg-black/40 backdrop-blur-[1px]" />
+      )}
+
+      {/* ═══ iOS System Alert Dialog ═══ */}
+      {showLocationModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center px-8">
           <div
-            className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-[500px] mx-auto border-t border-slate-100 bg-white/90 backdrop-blur-md px-4 sm:px-6 pt-4 sm:pt-5 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-[0_-4px_20px_rgba(0,0,0,0.04)]"
-            data-onboarding-footer
+            className="w-[270px] overflow-hidden rounded-[14px] shadow-2xl"
+            style={{
+              backgroundColor: 'rgba(245, 245, 245, 0.85)',
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            }}
           >
-            {/* Buttons */}
-            <div className="flex flex-col gap-3 sm:gap-4">
-              {/* Continue Button */}
-              <button
-                onClick={handleContinue}
-                disabled={!canContinue || isLoading || isDetectingLocation}
-                data-onboarding-cta
-                className={`flex w-full h-11 sm:h-12 cursor-pointer items-center justify-center rounded-full px-6 text-sm sm:text-base font-semibold transition-all active:scale-[0.98] ${
-                  canContinue && !isLoading && !isDetectingLocation
-                    ? 'bg-[#2b8cee] text-white hover:bg-[#2070c0] shadow-md shadow-[#2b8cee]/20'
-                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                }`}
-              >
-                {isDetectingLocation && (
-                  <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                )}
-                {getButtonText()}
-              </button>
+            {/* Content */}
+            <div className="px-4 pt-5 pb-4 text-center">
+              <h3 className="text-[17px] font-semibold leading-[22px] text-black mb-1">
+                Allow &ldquo;Hushh&rdquo; to use your location?
+              </h3>
+              <p className="text-[13px] leading-[16px] font-normal text-black px-1">
+                Your location is used to automatically determine your country and streamline the verification process.
+              </p>
+            </div>
 
-              {/* Back Button */}
+            {/* Action buttons — stacked iOS style */}
+            <div className="flex flex-col border-t" style={{ borderColor: 'rgba(60,60,67,0.2)' }}>
               <button
-                onClick={handleBack}
-                className="flex w-full cursor-pointer items-center justify-center rounded-full bg-transparent py-2 text-slate-500 text-sm font-semibold hover:text-slate-800 transition-colors"
+                onClick={handleAllowLocation}
+                className="h-[44px] w-full text-[17px] leading-[22px] text-[#007AFF] font-normal active:bg-gray-200/50 transition-colors border-b"
+                style={{ borderColor: 'rgba(60,60,67,0.2)' }}
               >
-                Back
+                Allow Once
+              </button>
+              <button
+                onClick={handleAllowLocation}
+                className="h-[44px] w-full text-[17px] leading-[22px] text-[#007AFF] font-normal active:bg-gray-200/50 transition-colors border-b"
+                style={{ borderColor: 'rgba(60,60,67,0.2)' }}
+              >
+                Allow While Using App
+              </button>
+              <button
+                onClick={handleDontAllow}
+                className="h-[44px] w-full text-[17px] leading-[22px] text-[#007AFF] font-semibold active:bg-gray-200/50 transition-colors"
+              >
+                Don&apos;t Allow
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ═══ Fixed Footer ═══ */}
+      {!isFooterVisible && !showLocationModal && (
+        <div
+          className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-[#C6C6C8]/30 z-40"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+          data-onboarding-footer
+        >
+          <div className="max-w-md mx-auto grid grid-cols-2 gap-4">
+            {/* Skip Button */}
+            <button
+              onClick={handleSkip}
+              className="h-[50px] w-full rounded-xl bg-[#F2F2F7] text-[#007AFF] font-semibold text-[17px] active:bg-gray-200 transition-colors flex items-center justify-center"
+            >
+              Skip
+            </button>
+            {/* Next Button */}
+            <button
+              onClick={handleContinue}
+              disabled={!canContinue || isLoading || isDetectingLocation}
+              data-onboarding-cta
+              className={`h-[50px] w-full rounded-xl font-semibold text-[17px] shadow-sm transition-all flex items-center justify-center ${
+                canContinue && !isLoading && !isDetectingLocation
+                  ? 'bg-[#007AFF] text-white active:opacity-90 active:scale-[0.98]'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {isDetectingLocation ? (
+                <>
+                  <div className="animate-spin h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full" />
+                  Detecting...
+                </>
+              ) : isLoading ? 'Saving...' : 'Next'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Permission Help Modal */}
       <PermissionHelpModal
         isOpen={showPermissionHelp}
         onClose={() => setShowPermissionHelp(false)}
-      />
-
-      {/* Location Permission Modal */}
-      <LocationPermissionModal
-        isOpen={showLocationModal}
-        onRequestLocation={handleDetectLocation}
-        onSkip={handleSkipDetection}
-        isDetecting={isDetectingLocation}
       />
     </div>
   );

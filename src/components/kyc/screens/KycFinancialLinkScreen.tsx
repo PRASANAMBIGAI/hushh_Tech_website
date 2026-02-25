@@ -1,28 +1,20 @@
 /**
- * KycFinancialLinkScreen — Pre-KYC Financial Verification
- * 
- * iOS-first design. White background, black text, grey icons.
- * Bright primary color accents (blue/teal) matching sign-nda style.
- * 
- * Links user's bank via Plaid and fetches 3 data points:
- * 1. Balance  2. Assets  3. Investments
- * 
- * User can proceed if at least 1 product is successfully fetched.
+ * KycFinancialLinkScreen - Pre-KYC Financial Verification
+ *
+ * Shows ALL individual accounts from Plaid, grouped by type.
+ * Also shows identity data (name, email, phone, address from bank).
  */
 'use client';
 
 import React, { useMemo } from 'react';
 import {
   Box,
-  VStack,
-  Heading,
   Text,
   Button,
   Flex,
   Spinner,
   Badge,
 } from '@chakra-ui/react';
-import { keyframes } from '@emotion/react';
 import { usePlaidLinkHook } from '../../../services/plaid/usePlaidLink';
 import {
   formatCurrency,
@@ -30,385 +22,251 @@ import {
 } from '../../../services/plaid/plaidService';
 import type { FinancialVerificationResult } from '../../../types/kyc';
 
-// =====================================================
-// Design Tokens — Apple-inspired
-// =====================================================
-
-const COLORS = {
-  primary: '#2F80ED',
-  primaryHover: '#2570D4',
-  primaryLight: '#EBF2FD',
-  accent: '#2F80ED',
-  accentLight: '#EBF2FD',
+/* iOS design tokens */
+const IOS = {
+  primary: '#007AFF',
+  primaryHover: '#0062CC',
+  text: '#000000',
+  secondary: '#8E8E93',
   bg: '#FFFFFF',
-  bgSubtle: '#FAFAFA',
-  textPrimary: '#000000',
-  textSecondary: '#6B7280',
-  textTertiary: '#9CA3AF',
-  border: '#E5E7EB',
-  borderLight: '#F3F4F6',
-  cardBg: '#FFFFFF',
-  cardBgHover: '#F9FAFB',
-  success: '#22C55E',
-  successBg: '#F0FDF4',
-  successBorder: '#BBF7D0',
-  error: '#EF4444',
-  errorBg: '#FEF2F2',
-  errorBorder: '#FECACA',
-  pending: '#F59E0B',
-  pendingBg: '#FFFBEB',
-  iconBg: '#F3F4F6',
-  green: '#22C55E',
+  listBg: '#F9F9FB',
+  separator: '#E5E5EA',
+  success: '#34C759',
+  error: '#FF3B30',
+  font: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
 };
 
-// =====================================================
-// Props
-// =====================================================
-
 export interface KycFinancialLinkScreenProps {
-  /** User ID for Plaid Link */
   userId: string;
-  /** User email (optional, improves Plaid Link UX) */
   userEmail?: string;
-  /** Called with financial verification result */
   onContinue: (result: FinancialVerificationResult) => void;
-  /** Called when user skips financial verification */
   onSkip?: () => void;
-  /** Bank name to display */
   bankName?: string;
 }
 
-// =====================================================
-// Animations — subtle, Apple-like
-// =====================================================
-
-const fadeIn = keyframes`
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-`;
-
-// =====================================================
-// Icons — clean gray SVGs (Apple-style)
-// =====================================================
-
-/** Wallet icon for Balance */
-const BalanceIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="2" y="6" width="20" height="14" rx="3" stroke="#8E8E93" strokeWidth="1.5" />
-    <path d="M2 10h20" stroke="#8E8E93" strokeWidth="1.5" />
-    <circle cx="17" cy="15" r="1.5" fill="#8E8E93" />
-  </svg>
-);
-
-/** Chart icon for Assets */
-const AssetsIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="3" y="3" width="18" height="18" rx="3" stroke="#8E8E93" strokeWidth="1.5" />
-    <path d="M7 17V13" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round" />
-    <path d="M12 17V9" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round" />
-    <path d="M17 17V11" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round" />
-  </svg>
-);
-
-/** Trending icon for Investments */
-const InvestmentsIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M3 17l5-5 4 4 9-9" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M17 7h4v4" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-
-// =====================================================
-// Status check icon
-// =====================================================
-
-const StatusIndicator: React.FC<{ status: ProductFetchStatus }> = ({ status }) => {
-  if (status === 'loading') {
-    return <Spinner size="xs" color={COLORS.textSecondary} speed="0.8s" />;
-  }
-
-  if (status === 'success') {
-    return (
-      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-        <circle cx="10" cy="10" r="10" fill={COLORS.success} />
-        <path d="M6 10l3 3 5-6" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    );
-  }
-
-  if (status === 'pending') {
-    return (
-      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-        <circle cx="10" cy="10" r="9" stroke={COLORS.pending} strokeWidth="1.5" />
-        <path d="M10 6v4l2.5 2.5" stroke={COLORS.pending} strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
-  if (status === 'error') {
-    return (
-      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-        <circle cx="10" cy="10" r="10" fill={COLORS.error} />
-        <path d="M7 7l6 6M13 7l-6 6" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
-  if (status === 'unavailable') {
-    return (
-      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-        <circle cx="10" cy="10" r="9" stroke={COLORS.textTertiary} strokeWidth="1.5" />
-        <path d="M7 10h6" stroke={COLORS.textTertiary} strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
-  // idle — no icon shown (avoids radio-button confusion)
-  return null;
+/* ─── Account type icon + color mapping ─── */
+const accountTypeConfig: Record<string, { icon: string; bg: string; color: string; label: string }> = {
+  checking: { icon: 'account_balance', bg: 'rgba(0,122,255,0.1)', color: '#007AFF', label: 'Checking' },
+  savings: { icon: 'savings', bg: 'rgba(52,199,89,0.1)', color: '#34C759', label: 'Savings' },
+  'credit card': { icon: 'credit_card', bg: 'rgba(255,149,0,0.1)', color: '#FF9500', label: 'Credit Card' },
+  mortgage: { icon: 'home', bg: 'rgba(175,82,222,0.1)', color: '#AF52DE', label: 'Mortgage' },
+  loan: { icon: 'account_balance_wallet', bg: 'rgba(255,59,48,0.1)', color: '#FF3B30', label: 'Loan' },
+  investment: { icon: 'trending_up', bg: 'rgba(0,199,190,0.1)', color: '#00C7BE', label: 'Investment' },
+  brokerage: { icon: 'monitoring', bg: 'rgba(0,199,190,0.1)', color: '#00C7BE', label: 'Brokerage' },
+  depository: { icon: 'account_balance', bg: 'rgba(0,122,255,0.1)', color: '#007AFF', label: 'Depository' },
+  credit: { icon: 'credit_card', bg: 'rgba(255,149,0,0.1)', color: '#FF9500', label: 'Credit' },
+  other: { icon: 'account_circle', bg: 'rgba(142,142,147,0.1)', color: '#8E8E93', label: 'Other' },
 };
 
-// =====================================================
-// Product Card — clean, minimal
-// =====================================================
+const getAccountConfig = (type: string, subtype: string) => {
+  return accountTypeConfig[subtype] || accountTypeConfig[type] || accountTypeConfig.other;
+};
 
-const ProductCard: React.FC<{
-  title: string;
-  icon: React.ReactNode;
-  status: ProductFetchStatus;
-  mainValue?: string;
-  subtitle?: string;
-  unavailableMessage?: string;
-  errorMessage?: string;
-  index: number;
-}> = ({ title, icon, status, mainValue, subtitle, unavailableMessage, errorMessage, index }) => {
-  // Status text
-  const statusText = useMemo(() => {
-    switch (status) {
-      case 'loading': return 'Fetching...';
-      case 'success': return mainValue || 'Verified';
-      case 'pending': return 'Generating report...';
-      case 'unavailable': return unavailableMessage || 'Not available';
-      case 'error': return errorMessage || 'Failed to fetch';
-      default: return 'Auto-fetched on connect';
-    }
-  }, [status, mainValue, unavailableMessage, errorMessage]);
-
-  // Status text color
-  const statusColor = useMemo(() => {
-    switch (status) {
-      case 'success': return COLORS.success;
-      case 'error': return COLORS.error;
-      case 'pending': return COLORS.pending;
-      case 'loading': return COLORS.textSecondary;
-      default: return COLORS.textTertiary;
-    }
-  }, [status]);
-
-  // Left accent color per status
-  const accentColor = useMemo(() => {
-    switch (status) {
-      case 'success': return COLORS.success;
-      case 'error': return COLORS.error;
-      case 'pending': return COLORS.pending;
-      case 'loading': return COLORS.primary;
-      default: return COLORS.border;
-    }
-  }, [status]);
+/* ─── Single Account Row ─── */
+const AccountRow: React.FC<{
+  account: any;
+  isLast?: boolean;
+}> = ({ account, isLast }) => {
+  const config = getAccountConfig(account.type, account.subtype);
+  const balance = account.balances?.current ?? account.balances?.available;
+  const currency = account.balances?.iso_currency_code || 'USD';
+  const isNegativeBalance = account.type === 'credit' || account.type === 'loan';
 
   return (
     <Flex
-      w="100%"
-      bg={COLORS.cardBg}
-      borderRadius="16px"
-      border="1px solid"
-      borderColor={status === 'success' ? COLORS.successBorder : COLORS.border}
-      p={4}
-      align="center"
-      gap={3}
-      transition="all 0.3s ease"
-      animation={status !== 'idle' ? `${fadeIn} 0.4s ease ${index * 0.1}s both` : undefined}
-      _hover={{ bg: COLORS.cardBgHover, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
-      boxShadow="0 1px 3px rgba(0,0,0,0.02)"
-      position="relative"
-      overflow="hidden"
+      align="center" px={4} py={3}
+      borderBottom={isLast ? 'none' : '0.5px solid'}
+      borderColor={IOS.separator}
     >
-      {/* Left accent bar */}
-      <Box
-        position="absolute"
-        left={0}
-        top="20%"
-        bottom="20%"
-        w="3px"
-        borderRadius="0 4px 4px 0"
-        bg={accentColor}
-        transition="all 0.3s ease"
-      />
-
-      {/* Icon container */}
-      <Box
-        w="44px"
-        h="44px"
-        borderRadius="12px"
-        bg={status === 'success' ? COLORS.successBg : COLORS.iconBg}
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-        flexShrink={0}
-        ml={1}
-        transition="background 0.3s ease"
+      {/* Icon */}
+      <Flex
+        w="36px" h="36px" borderRadius="10px"
+        bg={config.bg} align="center" justify="center"
+        mr={3} flexShrink={0}
       >
-        {icon}
-      </Box>
+        <Text
+          fontSize="20px" lineHeight="1" color={config.color}
+          className="material-symbols-outlined"
+          sx={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}
+        >
+          {config.icon}
+        </Text>
+      </Flex>
 
-      {/* Text content */}
+      {/* Name + type */}
       <Box flex="1" minW={0}>
-        <Text
-          fontSize="15px"
-          fontWeight="600"
-          color={COLORS.textPrimary}
-          lineHeight="1.3"
-        >
-          {title}
+        <Text fontSize="16px" fontWeight="500" color={IOS.text} noOfLines={1}>
+          {account.name || `${config.label} ...${account.mask}`}
         </Text>
-        <Text
-          fontSize="13px"
-          fontWeight="400"
-          color={statusColor}
-          mt="2px"
-          lineHeight="1.4"
-          noOfLines={1}
-        >
-          {statusText}
+        <Text fontSize="13px" color={IOS.secondary} mt={0.5}>
+          {config.label} {account.mask ? `···${account.mask}` : ''}
         </Text>
-        {status === 'success' && subtitle && (
-          <Text
-            fontSize="12px"
-            color={COLORS.textTertiary}
-            mt="1px"
-            noOfLines={1}
-          >
-            {subtitle}
-          </Text>
-        )}
       </Box>
 
-      {/* Right status indicator */}
-      <Box flexShrink={0}>
-        <StatusIndicator status={status} />
-      </Box>
+      {/* Balance */}
+      <Text
+        fontSize="16px" fontWeight="600"
+        color={isNegativeBalance && balance > 0 ? IOS.error : IOS.text}
+        flexShrink={0} ml={2}
+      >
+        {balance != null ? formatCurrency(balance, currency) : '—'}
+      </Text>
     </Flex>
   );
 };
 
-// =====================================================
-// Main Component
-// =====================================================
+/* ─── Section Header ─── */
+const SectionHeader: React.FC<{ title: string; count?: number }> = ({ title, count }) => (
+  <Text
+    pl={4} mb={2} mt={6} fontSize="13px" fontWeight="500"
+    color="gray.500" textTransform="uppercase" letterSpacing="0.06em"
+  >
+    {title} {count != null && `(${count})`}
+  </Text>
+);
 
+/* ─── Product Status Row ─── */
+const StatusRow: React.FC<{
+  title: string;
+  icon: string;
+  iconBg: string;
+  iconColor: string;
+  status: ProductFetchStatus;
+  mainValue?: string;
+  message?: string;
+  isLast?: boolean;
+}> = ({ title, icon, iconBg, iconColor, status, mainValue, message, isLast }) => {
+  const text = status === 'loading' ? 'Fetching...'
+    : status === 'success' ? (mainValue || '✓ Verified')
+    : status === 'pending' ? 'Generating...'
+    : (message || 'Not available');
+
+  return (
+    <Flex
+      align="center" px={4} py={3}
+      borderBottom={isLast ? 'none' : '0.5px solid'}
+      borderColor={IOS.separator}
+    >
+      <Flex
+        w="32px" h="32px" borderRadius="full"
+        bg={iconBg} align="center" justify="center"
+        mr={3} flexShrink={0}
+      >
+        <Text
+          fontSize="18px" lineHeight="1" color={iconColor}
+          className="material-symbols-outlined"
+          sx={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}
+        >
+          {icon}
+        </Text>
+      </Flex>
+      <Text flex="1" fontSize="16px" fontWeight="500" color={IOS.text}>{title}</Text>
+      <Flex align="center" gap={2}>
+        {status === 'loading' && <Spinner size="sm" color={IOS.primary} thickness="3px" />}
+        <Text fontSize="15px" color={status === 'success' ? IOS.text : '#C7C7CC'} fontWeight={status === 'success' ? '600' : '400'}>
+          {text}
+        </Text>
+      </Flex>
+    </Flex>
+  );
+};
+
+/* ═══════════════════════════════════════════════════
+   MAIN COMPONENT
+   ═══════════════════════════════════════════════════ */
 const KycFinancialLinkScreen: React.FC<KycFinancialLinkScreenProps> = ({
-  userId,
-  userEmail,
-  onContinue,
-  onSkip,
-  bankName = 'Hushh',
+  userId, userEmail, onContinue, onSkip,
 }) => {
   const plaid = usePlaidLinkHook(userId, userEmail);
 
-  // Display values for each product
-  const balanceDisplay = useMemo(() => {
-    const data = plaid.financialData?.balance?.data;
-    if (!data) return { mainValue: undefined, subtitle: undefined };
-
-    // Raw Plaid response has `accounts[]` array — compute totals from it
-    const accounts = data.accounts || [];
-    const accountCount = accounts.length;
-    const totalBalance = accounts.reduce(
-      (sum: number, acc: any) => sum + (acc.balances?.current || 0), 0
-    );
-    const currency = accounts[0]?.balances?.iso_currency_code || 'USD';
-
-    return {
-      mainValue: formatCurrency(totalBalance, currency),
-      subtitle: `${accountCount} account${accountCount !== 1 ? 's' : ''} linked`,
-    };
+  /* ─── Extract all accounts from balance data ─── */
+  const allAccounts = useMemo(() => {
+    const balanceAccounts = plaid.financialData?.balance?.data?.accounts || [];
+    return balanceAccounts;
   }, [plaid.financialData]);
 
-  const assetsDisplay = useMemo(() => {
-    const data = plaid.financialData?.assets?.data;
-    if (!data) return { mainValue: undefined, subtitle: undefined };
-    if (data.status === 'pending') return { mainValue: undefined, subtitle: undefined };
-    const totalAccounts = data.items?.reduce(
-      (sum: number, item: any) => sum + (item.accounts?.length || 0), 0
-    ) || 0;
-    return {
-      mainValue: 'Report generated',
-      subtitle: `${data.days_requested} days · ${totalAccounts} account${totalAccounts !== 1 ? 's' : ''}`,
-    };
-  }, [plaid.financialData]);
-
-  const investmentsDisplay = useMemo(() => {
-    const data = plaid.financialData?.investments?.data;
-    if (!data) return { mainValue: undefined, subtitle: undefined };
-
-    // Raw Plaid response has `holdings[]` and `securities[]` arrays
-    const holdings = data.holdings || [];
-    const holdingsCount = holdings.length;
-    const totalValue = holdings.reduce(
-      (sum: number, h: any) => sum + (h.institution_value || 0), 0
-    );
-    const currency = holdings[0]?.iso_currency_code || 'USD';
-
-    return {
-      mainValue: formatCurrency(totalValue, currency),
-      subtitle: `${holdingsCount} holding${holdingsCount !== 1 ? 's' : ''} found`,
-    };
-  }, [plaid.financialData]);
-
-  // Header text
-  const headerTitle = useMemo(() => {
-    if (plaid.step === 'done') {
-      if (plaid.productsAvailable === 3) return 'Complete Profile';
-      if (plaid.productsAvailable > 0) return 'Profile Verified';
-      return 'Unable to Verify';
+  /* ─── Group accounts by type ─── */
+  const accountGroups = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    for (const acc of allAccounts) {
+      const key = acc.type || 'other';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(acc);
     }
-    return 'Financial Verification';
-  }, [plaid.step, plaid.productsAvailable]);
+    return groups;
+  }, [allAccounts]);
 
+  /* ─── Total net worth ─── */
+  const totalBalance = useMemo(() => {
+    return allAccounts.reduce((sum: number, acc: any) => {
+      const bal = acc.balances?.current ?? acc.balances?.available ?? 0;
+      return sum + bal;
+    }, 0);
+  }, [allAccounts]);
+
+  /* ─── Identity data ─── */
+  const identityInfo = useMemo(() => {
+    const id = plaid.financialData?.identity?.data;
+    if (!id) return null;
+    const accounts = id.accounts || [];
+    if (accounts.length === 0) return null;
+    const owners = accounts[0]?.owners || [];
+    if (owners.length === 0) return null;
+    const owner = owners[0];
+    // Deduplicate emails and phones (case-insensitive for emails)
+    const rawEmails = (owner.emails || []).map((e: any) => e.data).filter(Boolean);
+    const uniqueEmails = [...new Set(rawEmails.map((e: string) => e.toLowerCase()))];
+
+    const rawPhones = (owner.phone_numbers || []).map((p: any) => p.data).filter(Boolean);
+    const uniquePhones = [...new Set(rawPhones)];
+
+    return {
+      names: owner.names || [],
+      emails: uniqueEmails,
+      phones: uniquePhones,
+      addresses: (owner.addresses || []).map((a: any) => {
+        const d = a.data || {};
+        return [d.street, d.city, d.region, d.postal_code, d.country].filter(Boolean).join(', ');
+      }),
+    };
+  }, [plaid.financialData]);
+
+  /* ─── Investment holdings ─── */
+  const investmentHoldings = useMemo(() => {
+    const data = plaid.financialData?.investments?.data;
+    if (!data) return [];
+    return data.holdings || [];
+  }, [plaid.financialData]);
+
+  const investmentTotal = useMemo(() => {
+    return investmentHoldings.reduce((sum: number, h: any) => sum + (h.institution_value || 0), 0);
+  }, [investmentHoldings]);
+
+  /* ─── UI state ─── */
   const headerSubtitle = useMemo(() => {
     if (plaid.step === 'done' && plaid.institution) {
-      return `Connected to ${plaid.institution.name}`;
+      return `Connected to ${plaid.institution.name}. You can continue to the next step.`;
     }
     return "We'll securely check your financial profile before starting KYC verification.";
   }, [plaid.step, plaid.institution]);
 
   const isProcessing = ['creating_token', 'exchanging', 'fetching'].includes(plaid.step);
   const isInitializing = plaid.step === 'idle' || plaid.step === 'creating_token';
+  const isDone = plaid.step === 'done';
+  const canProceed = isDone && plaid.canProceed;
 
-  // Info message after results
-  const infoMessage = useMemo(() => {
-    if (plaid.step !== 'done') return null;
-    if (plaid.productsAvailable === 3) return null;
-    if (plaid.productsAvailable > 0) {
-      return "We've saved what's available. You can link additional accounts later.";
-    }
-    return 'Something went wrong. Please try again or link a different account.';
-  }, [plaid.step, plaid.productsAvailable]);
-
-  // Button text
   const buttonText = useMemo(() => {
-    if (plaid.step === 'idle') return 'Preparing...';
-    if (plaid.step === 'creating_token') return 'Preparing...';
+    if (plaid.step === 'idle' || plaid.step === 'creating_token') return 'Preparing...';
     if (plaid.step === 'linking') return 'Connecting...';
     if (plaid.step === 'exchanging') return 'Securing connection...';
     if (plaid.step === 'fetching') return 'Fetching financial data...';
-    if (plaid.step === 'done' && plaid.canProceed) return 'Continue to KYC';
-    if (plaid.step === 'error' || (plaid.step === 'done' && !plaid.canProceed)) return 'Try Again';
-    return 'Link Bank Account';
-  }, [plaid.step, plaid.canProceed]);
+    if (isDone && canProceed) return 'Continue to KYC';
+    if (plaid.step === 'error' || (isDone && !plaid.canProceed)) return 'Try Again';
+    return 'Connect Bank Account';
+  }, [plaid.step, plaid.canProceed, isDone, canProceed]);
 
-  // Handle button click
   const handleButtonClick = () => {
-    if (plaid.step === 'done' && plaid.canProceed) {
+    if (isDone && canProceed) {
       const result: FinancialVerificationResult = {
         verified: true,
         productsAvailable: plaid.productsAvailable,
@@ -422,367 +280,183 @@ const KycFinancialLinkScreen: React.FC<KycFinancialLinkScreenProps> = ({
       onContinue(result);
       return;
     }
-
-    if (plaid.step === 'error' || (plaid.step === 'done' && !plaid.canProceed)) {
-      plaid.retry();
-      return;
-    }
-
-    if (plaid.isReady) {
-      plaid.openPlaidLink();
-    }
+    if (plaid.step === 'error' || (isDone && !plaid.canProceed)) { plaid.retry(); return; }
+    if (plaid.isReady) plaid.openPlaidLink();
   };
 
-  // Button bg color based on state — matches KYC flow gradient
-  const buttonBg = useMemo(() => {
-    if (plaid.step === 'done' && plaid.canProceed) return COLORS.success;
-    if (plaid.step === 'error' || (plaid.step === 'done' && !plaid.canProceed)) return COLORS.error;
-    return COLORS.primary;
-  }, [plaid.step, plaid.canProceed]);
-
-  const buttonHoverBg = useMemo(() => {
-    if (plaid.step === 'done' && plaid.canProceed) return '#2DB84E';
-    if (plaid.step === 'error' || (plaid.step === 'done' && !plaid.canProceed)) return '#E5342B';
-    return COLORS.primaryHover;
-  }, [plaid.step, plaid.canProceed]);
+  const groupLabels: Record<string, string> = {
+    depository: 'Checking & Savings',
+    credit: 'Credit Cards',
+    loan: 'Loans & Mortgages',
+    investment: 'Investments',
+    other: 'Other Accounts',
+  };
 
   return (
     <Box
       className="onboarding-shell"
-      minH="100dvh"
-      h="100dvh"
-      bg={COLORS.bg}
-      display="flex"
-      flexDirection="column"
-      position="relative"
+      minH="calc(100dvh - var(--onboarding-top-space, 7rem))"
+      h="calc(100dvh - var(--onboarding-top-space, 7rem))"
+      display="flex" flexDirection="column" bg={IOS.bg} fontFamily={IOS.font}
+      sx={{ '--onboarding-footer-space': '0px', WebkitFontSmoothing: 'antialiased' }}
     >
-      {/* Scrollable Content */}
-      <Box
-        as="main"
-        flex="1"
-        minH={0}
-        overflowY="auto"
-        overflowX="hidden"
-        px={{ base: 4, md: 5 }}
-        pt={{ base: 8, md: 10 }}
-      >
-        <VStack
-          spacing={0}
-          align="center"
-          maxW="390px"
-          mx="auto"
-          w="100%"
-        >
-        {/* Icon Badge */}
-        <Flex
-          w="64px"
-          h="64px"
-          borderRadius="18px"
-          bg={COLORS.primary}
-          align="center"
-          justify="center"
-          mb={4}
-          boxShadow={`0 6px 20px ${COLORS.primary}30`}
-        >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M19 5H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2z" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3 10h18" stroke="white" strokeWidth="1.8" />
-            <circle cx="16" cy="14.5" r="1.5" fill="white" />
-          </svg>
-        </Flex>
+      {/* Scrollable content */}
+      <Box as="main" flex="1 1 auto" minH={0} overflowY="auto" overflowX="hidden" pb={6} sx={{ WebkitOverflowScrolling: 'touch' }}>
 
-        {/* Step badge */}
-        <Badge
-          bg={COLORS.primaryLight}
-          color={COLORS.primary}
-          px={3}
-          py={1}
-          borderRadius="full"
-          fontSize="10px"
-          fontWeight="700"
-          textTransform="uppercase"
-          letterSpacing="0.06em"
-          mb={3}
-        >
-          Pre-KYC Step
-        </Badge>
-
-        {/* Title */}
-        <Heading
-          as="h1"
-          fontSize="28px"
-          fontWeight="700"
-          color={COLORS.textPrimary}
-          textAlign="center"
-          letterSpacing="-0.5px"
-          lineHeight="1.15"
-          mb={2}
-        >
-          {headerTitle}
-        </Heading>
-
-        {/* Subtitle */}
-        <Text
-          fontSize="15px"
-          color={COLORS.textSecondary}
-          textAlign="center"
-          lineHeight="1.5"
-          px={2}
-          mb={4}
-        >
-          {headerSubtitle}
-        </Text>
-
-        {/* Security badge — prominent pill */}
-        <Flex
-          align="center"
-          gap={2}
-          mb={6}
-          px={4}
-          py={2.5}
-          borderRadius="full"
-          bg={COLORS.accentLight}
-          border="1px solid"
-          borderColor={`${COLORS.accent}30`}
-        >
-          <Box w="7px" h="7px" borderRadius="full" bg={COLORS.green} />
-          <Text fontSize="12px" color={COLORS.textSecondary} fontWeight="600">
-            256-bit encryption · Powered by Plaid
+        {/* Header */}
+        <Box pt={14} px={5} pb={0} mb={2}>
+          <Text as="h1" fontSize="34px" lineHeight="41px" fontWeight="900" letterSpacing="-0.02em" color={IOS.text} mb={3}>
+            Financial Verification
           </Text>
-        </Flex>
+          <Text fontSize="17px" lineHeight="22px" color="gray.500" fontWeight="400">
+            {headerSubtitle}
+          </Text>
+        </Box>
 
-        {/* Gradient divider */}
-        <Box w="100%" h="2px" bg={`linear-gradient(90deg, transparent, ${COLORS.primary}40, ${COLORS.accent}40, transparent)`} borderRadius="full" mb={6} />
-
-        {/* Product Cards */}
-        <VStack spacing={3} w="100%" mb={6}>
-          <ProductCard
-            title="Balance"
-            icon={<BalanceIcon />}
-            status={plaid.balanceStatus}
-            mainValue={balanceDisplay.mainValue}
-            subtitle={balanceDisplay.subtitle}
-            unavailableMessage="Not available for this institution"
-            errorMessage={plaid.financialData?.balance?.error || 'Failed to fetch'}
-            index={0}
-          />
-
-          <ProductCard
-            title="Assets"
-            icon={<AssetsIcon />}
-            status={plaid.assetsStatus}
-            mainValue={assetsDisplay.mainValue}
-            subtitle={assetsDisplay.subtitle}
-            unavailableMessage="Not supported by this institution"
-            errorMessage={plaid.financialData?.assets?.error || 'Failed to fetch'}
-            index={1}
-          />
-
-          <ProductCard
-            title="Investments"
-            icon={<InvestmentsIcon />}
-            status={plaid.investmentsStatus}
-            mainValue={investmentsDisplay.mainValue}
-            subtitle={investmentsDisplay.subtitle}
-            unavailableMessage="No investment accounts found"
-            errorMessage={plaid.financialData?.investments?.error || 'Failed to fetch'}
-            index={2}
-          />
-        </VStack>
-
-        {/* Info Message */}
-        {infoMessage && (
-          <Box
-            w="100%"
-            borderRadius="12px"
-            bg={COLORS.borderLight}
-            p={4}
-            mb={4}
-            animation={`${fadeIn} 0.4s ease 0.3s both`}
-          >
-            <Text
-              fontSize="13px"
-              color={COLORS.textSecondary}
-              textAlign="center"
-              lineHeight="1.5"
-            >
-              {infoMessage}
-            </Text>
+        {/* Connected badge */}
+        {isDone && plaid.institution && (
+          <Box px={5} mt={4} mb={2}>
+            <Badge bg="green.50" color="green.600" fontSize="13px" fontWeight="600" px={3} py={1} borderRadius="full" border="1px solid" borderColor="green.200">
+              ✓ Connected to {plaid.institution.name}
+            </Badge>
           </Box>
         )}
 
-        {/* Error Message */}
+        {/* ═══ ALL ACCOUNTS — grouped by type ═══ */}
+        {allAccounts.length > 0 && (
+          <Box px={5}>
+            {/* Total summary */}
+            <SectionHeader title="Total Balance" />
+            <Box bg={IOS.listBg} borderRadius="12px" overflow="hidden" border="0.5px solid" borderColor="rgba(0,0,0,0.04)" mb={2}>
+              <Flex align="center" px={4} py={4}>
+                <Box flex="1">
+                  <Text fontSize="13px" color={IOS.secondary} mb={1}>All Accounts ({allAccounts.length})</Text>
+                  <Text fontSize="28px" fontWeight="700" color={IOS.text}>{formatCurrency(totalBalance)}</Text>
+                </Box>
+              </Flex>
+            </Box>
+
+            {/* Individual account groups */}
+            {Object.entries(accountGroups).map(([type, accounts]) => (
+              <Box key={type}>
+                <SectionHeader title={groupLabels[type] || type} count={accounts.length} />
+                <Box bg={IOS.listBg} borderRadius="12px" overflow="hidden" border="0.5px solid" borderColor="rgba(0,0,0,0.04)">
+                  {accounts.map((acc: any, i: number) => (
+                    <AccountRow key={acc.account_id || i} account={acc} isLast={i === accounts.length - 1} />
+                  ))}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        )}
+
+        {/* ═══ Investments ═══ */}
+        {investmentHoldings.length > 0 && (
+          <Box px={5}>
+            <SectionHeader title="Investment Holdings" count={investmentHoldings.length} />
+            <Box bg={IOS.listBg} borderRadius="12px" overflow="hidden" border="0.5px solid" borderColor="rgba(0,0,0,0.04)">
+              {investmentHoldings.map((h: any, i: number) => (
+                <Flex key={i} align="center" px={4} py={3} borderBottom={i === investmentHoldings.length - 1 ? 'none' : '0.5px solid'} borderColor={IOS.separator}>
+                  <Flex w="36px" h="36px" borderRadius="10px" bg="rgba(0,199,190,0.1)" align="center" justify="center" mr={3}>
+                    <Text fontSize="20px" lineHeight="1" color="#00C7BE" className="material-symbols-outlined" sx={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>trending_up</Text>
+                  </Flex>
+                  <Box flex="1" minW={0}>
+                    <Text fontSize="16px" fontWeight="500" color={IOS.text} noOfLines={1}>{h.security_id || `Holding ${i + 1}`}</Text>
+                    <Text fontSize="13px" color={IOS.secondary}>{h.quantity} shares</Text>
+                  </Box>
+                  <Text fontSize="16px" fontWeight="600" color={IOS.text}>{formatCurrency(h.institution_value, h.iso_currency_code || 'USD')}</Text>
+                </Flex>
+              ))}
+              <Flex px={4} py={3} borderTop="0.5px solid" borderColor={IOS.separator}>
+                <Text flex="1" fontSize="15px" fontWeight="600" color={IOS.text}>Total Investments</Text>
+                <Text fontSize="16px" fontWeight="700" color={IOS.text}>{formatCurrency(investmentTotal)}</Text>
+              </Flex>
+            </Box>
+          </Box>
+        )}
+
+        {/* ═══ Identity Data ═══ */}
+        {identityInfo && (
+          <Box px={5}>
+            <SectionHeader title="Bank-Verified Identity" />
+            <Box bg={IOS.listBg} borderRadius="12px" overflow="hidden" border="0.5px solid" borderColor="rgba(0,0,0,0.04)">
+              {identityInfo.names.length > 0 && (
+                <Flex align="center" px={4} py={3} borderBottom="0.5px solid" borderColor={IOS.separator}>
+                  <Text fontSize="20px" mr={3} className="material-symbols-outlined" color={IOS.secondary} sx={{ fontVariationSettings: "'FILL' 1, 'wght' 400" }}>person</Text>
+                  <Box flex="1"><Text fontSize="13px" color={IOS.secondary}>Name</Text><Text fontSize="16px" fontWeight="500" color={IOS.text}>{identityInfo.names.join(', ')}</Text></Box>
+                </Flex>
+              )}
+              {identityInfo.emails.length > 0 && (
+                <Flex align="center" px={4} py={3} borderBottom="0.5px solid" borderColor={IOS.separator}>
+                  <Text fontSize="20px" mr={3} className="material-symbols-outlined" color={IOS.secondary} sx={{ fontVariationSettings: "'FILL' 1, 'wght' 400" }}>email</Text>
+                  <Box flex="1"><Text fontSize="13px" color={IOS.secondary}>Email</Text><Text fontSize="16px" fontWeight="500" color={IOS.text}>{identityInfo.emails.join(', ')}</Text></Box>
+                </Flex>
+              )}
+              {identityInfo.phones.length > 0 && (
+                <Flex align="center" px={4} py={3} borderBottom="0.5px solid" borderColor={IOS.separator}>
+                  <Text fontSize="20px" mr={3} className="material-symbols-outlined" color={IOS.secondary} sx={{ fontVariationSettings: "'FILL' 1, 'wght' 400" }}>phone</Text>
+                  <Box flex="1"><Text fontSize="13px" color={IOS.secondary}>Phone</Text><Text fontSize="16px" fontWeight="500" color={IOS.text}>{identityInfo.phones.join(', ')}</Text></Box>
+                </Flex>
+              )}
+              {identityInfo.addresses.length > 0 && (
+                <Flex align="center" px={4} py={3}>
+                  <Text fontSize="20px" mr={3} className="material-symbols-outlined" color={IOS.secondary} sx={{ fontVariationSettings: "'FILL' 1, 'wght' 400" }}>location_on</Text>
+                  <Box flex="1"><Text fontSize="13px" color={IOS.secondary}>Address</Text><Text fontSize="15px" fontWeight="500" color={IOS.text}>{identityInfo.addresses[0]}</Text></Box>
+                </Flex>
+              )}
+            </Box>
+          </Box>
+        )}
+
+        {/* ═══ Product Status Summary ═══ */}
+        <Box px={5}>
+          <SectionHeader title="Product Status" />
+          <Box bg={IOS.listBg} borderRadius="12px" overflow="hidden" border="0.5px solid" borderColor="rgba(0,0,0,0.04)">
+            <StatusRow title="Balance" icon="account_balance_wallet" iconBg="rgba(0,122,255,0.1)" iconColor={IOS.primary} status={plaid.balanceStatus} mainValue={allAccounts.length > 0 ? `${allAccounts.length} accounts` : undefined} message="Not available" />
+            <StatusRow title="Assets" icon="finance_mode" iconBg="rgba(52,199,89,0.1)" iconColor={IOS.success} status={plaid.assetsStatus} mainValue={plaid.financialData?.assets?.available ? 'Report generated' : undefined} message={plaid.financialData?.assets?.reason === 'not_supported' ? 'Not supported' : 'Not available'} />
+            <StatusRow title="Investments" icon="monitoring" iconBg="rgba(175,82,222,0.1)" iconColor="#AF52DE" status={plaid.investmentsStatus} mainValue={investmentHoldings.length > 0 ? `${investmentHoldings.length} holdings` : undefined} message={plaid.financialData?.investments?.reason === 'not_supported' ? 'Not supported' : 'No investment accounts'} />
+            <StatusRow title="Identity" icon="badge" iconBg="rgba(255,149,0,0.1)" iconColor="#FF9500" status={identityInfo ? 'success' : (plaid.step === 'done' ? 'unavailable' : 'idle')} mainValue={identityInfo ? '✓ Verified' : undefined} message="Not available" isLast />
+          </Box>
+        </Box>
+
+        {/* Error */}
         {plaid.error && plaid.step === 'error' && (
-          <Box
-            w="100%"
-            borderRadius="12px"
-            bg={COLORS.errorBg}
-            border="1px solid"
-            borderColor="#FFD5D2"
-            p={4}
-            mb={4}
-          >
-            <Text
-              fontSize="13px"
-              color={COLORS.error}
-              textAlign="center"
-              lineHeight="1.5"
-            >
-              {plaid.error}
-            </Text>
+          <Box mx={5} mt={4} p={3} borderRadius="12px" bg="#FEF2F2" border="1px solid #FECACA">
+            <Text textAlign="center" fontSize="13px" color={IOS.error} lineHeight="1.5">{plaid.error}</Text>
           </Box>
         )}
-
-        </VStack>
       </Box>
 
-      {/* Sticky Bottom CTA — fixed, centered, connected to footer */}
-      <Box
-        position="fixed"
-        bottom={0}
-        left={0}
-        right={0}
-        w="100%"
-        maxW="500px"
-        mx="auto"
-        bg="rgba(255,255,255,0.95)"
-        backdropFilter="blur(20px)"
-        sx={{ WebkitBackdropFilter: 'blur(20px)' }}
-        borderTop="1px solid"
-        borderColor={COLORS.border}
-        px={{ base: 4, md: 5 }}
-        pt={4}
-        pb={6}
-        zIndex={50}
-        boxShadow="0 -4px 20px rgba(0,0,0,0.03)"
-        data-onboarding-footer=""
-      >
-        <Box w="100%">
-        {/* "Continue to KYC" — CTA */}
-        {plaid.step === 'done' && plaid.canProceed && (
-          <Button
-            w="100%"
-            data-onboarding-cta
-            size="lg"
-            bg={COLORS.primary}
-            color="white"
-            borderRadius="14px"
-            h="54px"
-            fontSize="16px"
-            fontWeight="600"
-            _hover={{
-              transform: 'translateY(-1px)',
-              boxShadow: `0 6px 20px ${COLORS.primary}35`,
-            }}
-            _active={{ transform: 'translateY(0)' }}
-            transition="all 0.2s ease"
-            onClick={handleButtonClick}
-            aria-label="Continue to KYC Step 1"
-            tabIndex={0}
-            animation={`${fadeIn} 0.4s ease both`}
-            boxShadow={`0 3px 12px ${COLORS.primary}25`}
-          >
-            Continue to KYC →
-          </Button>
-        )}
-
-        {/* Link / Retry / Loading button */}
-        {!(plaid.step === 'done' && plaid.canProceed) && (
-          <Button
-            w="100%"
-            data-onboarding-cta
-            size="lg"
-            bg={buttonBg}
-            color="white"
-            borderRadius="14px"
-            h="54px"
-            fontSize="16px"
-            fontWeight="600"
-            isDisabled={isInitializing || isProcessing}
-            isLoading={isInitializing || isProcessing}
-            loadingText={buttonText}
-            _hover={{
-              transform: 'translateY(-1px)',
-              boxShadow: `0 6px 20px ${COLORS.primary}30`,
-            }}
-            _active={{ transform: 'translateY(0)' }}
-            _disabled={{
-              bg: COLORS.border,
-              color: COLORS.textTertiary,
-              cursor: 'not-allowed',
-              boxShadow: 'none',
-            }}
-            transition="all 0.2s ease"
-            onClick={handleButtonClick}
-            aria-label={buttonText}
-            tabIndex={0}
-          >
-            {buttonText}
-          </Button>
-        )}
-
-        {/* Secondary action — link different account */}
-        {(plaid.step === 'done' || plaid.step === 'error') && (
-          <Button
-            w="100%"
-            mt={2}
-            size="md"
-            variant="ghost"
-            color={COLORS.textSecondary}
-            fontWeight="400"
-            fontSize="14px"
-            onClick={plaid.retry}
-            borderRadius="14px"
-            _hover={{
-              color: COLORS.textPrimary,
-              bg: COLORS.borderLight,
-            }}
-            tabIndex={0}
-            aria-label={
-              plaid.step === 'done' && plaid.canProceed
-                ? 'Link a different account'
-                : 'Try a different account'
-            }
-          >
-            {plaid.step === 'done' && plaid.canProceed
-              ? 'Link a different account'
-              : 'Try a different account'}
-          </Button>
-        )}
-
-        {/* Footer text */}
-        <Text
-          textAlign="center"
-          fontSize="12px"
-          color={COLORS.textTertiary}
-          mt={2}
+      {/* ═══ Bottom action bar — flex child, not absolute ═══ */}
+      <Box flexShrink={0} bg="rgba(255,255,255,0.95)" backdropFilter="blur(20px)" sx={{ WebkitBackdropFilter: 'blur(20px)' }} px={5} pt={4} pb={8} borderTop="0.5px solid" borderColor={IOS.separator}>
+        <Flex align="center" justify="center" mb={5} gap={1.5} opacity={0.7}>
+          <Text fontSize="16px" lineHeight="1" color={IOS.secondary} className="material-symbols-outlined" sx={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>lock</Text>
+          <Text fontSize="13px" fontWeight="500" color={IOS.secondary}>Secure 256-bit encryption</Text>
+        </Flex>
+        <Button
+          w="100%" data-onboarding-cta
+          bg={canProceed ? IOS.success : IOS.primary} color="white"
+          borderRadius="12px" h="52px" fontSize="17px" fontWeight="600"
+          isDisabled={isInitializing || isProcessing}
+          isLoading={isInitializing || isProcessing}
+          loadingText={buttonText}
+          _hover={{ bg: canProceed ? '#15803D' : IOS.primaryHover }}
+          _active={{ transform: 'scale(0.98)' }}
+          _disabled={{ bg: '#CBD5E1', color: '#94A3B8', cursor: 'not-allowed' }}
+          transition="all 0.2s" onClick={handleButtonClick} aria-label={buttonText}
         >
-          {bankName} × Hushh Financial Verification
-        </Text>
-
-        {/* Skip for now */}
-        {onSkip && (
-          <Button
-            w="100%"
-            mt={1}
-            size="sm"
-            variant="ghost"
-            color={COLORS.textTertiary}
-            fontWeight="400"
-            fontSize="14px"
-            onClick={onSkip}
-            borderRadius="12px"
-            _hover={{
-              color: COLORS.textPrimary,
-              bg: COLORS.borderLight,
-            }}
-            tabIndex={0}
-            aria-label="Skip financial verification for now"
-          >
-            Skip for now →
+          {buttonText}
+        </Button>
+        <Flex mt={3} justify="center" gap={4}>
+          {onSkip && (
+            <Button variant="ghost" color={IOS.secondary} fontSize="15px" fontWeight="600" h="auto" py={2} _hover={{ color: IOS.text }} onClick={onSkip} aria-label="Skip for now">
+              Skip for now
+            </Button>
+          )}
+          <Button variant="ghost" color={IOS.primary} fontSize="15px" fontWeight="600" h="auto" py={2} onClick={isDone ? plaid.retry : () => plaid.isReady && plaid.openPlaidLink()} aria-label="Connect another account">
+            Connect another account
           </Button>
-        )}
-        </Box>
+        </Flex>
       </Box>
     </Box>
   );

@@ -1,121 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import config from '../../resources/config/config';
-import { upsertOnboardingData } from '../../services/onboarding/upsertOnboardingData';
 import { useFooterVisibility } from '../../utils/useFooterVisibility';
+import HushhTechBackHeader from '../../components/hushh-tech-back-header/HushhTechBackHeader';
+import HushhTechCta, { HushhTechCtaVariant } from '../../components/hushh-tech-cta/HushhTechCta';
 
-// Types for calendar booking
-interface TimeSlot {
-  startTime: string;
-  endTime: string;
-  available: boolean;
-}
-
-interface DayAvailability {
-  date: string;
-  slots: TimeSlot[];
-}
-
-interface CalendarData {
-  ceo: { name: string; email: string };
-  timezone: string;
-  meetingDuration: number;
-  availability: DayAvailability[];
-}
-
+// Types
+interface TimeSlot { startTime: string; endTime: string; available: boolean; }
+interface DayAvailability { date: string; slots: TimeSlot[]; }
+interface CalendarData { ceo: { name: string; email: string }; timezone: string; meetingDuration: number; availability: DayAvailability[]; }
 type PaymentState = 'loading' | 'not_paid' | 'verifying' | 'paid' | 'booked';
-
-// Back arrow icon
-const BackIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-);
-
-// Shield check icon
-const ShieldCheckIcon = ({ className = "" }: { className?: string }) => (
-  <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-  </svg>
-);
-
-// Star icon
-const StarIcon = ({ className = "" }: { className?: string }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-  </svg>
-);
-
-// Coin icon
-const CoinIcon = ({ className = "" }: { className?: string }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
-  </svg>
-);
-
-// Calendar icon
-const CalendarIcon = ({ className = "" }: { className?: string }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/>
-  </svg>
-);
-
-// Lock icon
-const LockIcon = ({ className = "" }: { className?: string }) => (
-  <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
-  </svg>
-);
-
-// Checkmark icon
-const CheckIcon = ({ className = "" }: { className?: string }) => (
-  <svg className={className} width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
-// Shimmer loading component
-const ShimmerLoader = ({ message }: { message: string }) => (
-  <div 
-    className="bg-slate-50 min-h-screen"
-    style={{ fontFamily: "'Manrope', sans-serif" }}
-  >
-    <div className="onboarding-shell relative flex min-h-screen w-full flex-col bg-white max-w-[500px] mx-auto shadow-xl overflow-hidden border-x border-slate-100">
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          {/* Shimmer avatar */}
-          <div className="flex justify-center mb-8">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse" />
-          </div>
-          
-          {/* Shimmer title */}
-          <div className="space-y-3 mb-8">
-            <div className="h-8 w-3/4 mx-auto bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded-lg animate-pulse" />
-            <div className="h-4 w-1/2 mx-auto bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded animate-pulse" />
-          </div>
-
-          {/* Spinning loader */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative w-16 h-16">
-              <div className="absolute inset-0 rounded-full border-4 border-slate-200" />
-              <div 
-                className="absolute inset-0 rounded-full border-4 border-t-[#2b8cee] animate-spin"
-                style={{ animationDuration: '1s' }}
-              />
-            </div>
-            <p className="text-lg text-slate-600 font-medium">{message}</p>
-          </div>
-
-          {/* Shimmer content blocks */}
-          <div className="mt-8 space-y-4">
-            <div className="h-20 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded-xl animate-pulse" />
-            <div className="h-14 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded-full animate-pulse" />
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+const VALID_COUPON = 'ILOVEHUSHH';
 
 function MeetCeoPage() {
   const navigate = useNavigate();
@@ -125,660 +20,465 @@ function MeetCeoPage() {
   const [error, setError] = useState<string | null>(null);
   const [hushhCoins, setHushhCoins] = useState(0);
   const isFooterVisible = useFooterVisibility();
-  
-  // Calendar booking state
+
+  // Coupon state
+  const [showCoupon, setShowCoupon] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  // Calendar state
   const [calendarData, setCalendarData] = useState<CalendarData | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [bookingInProgress, setBookingInProgress] = useState(false);
-  const [meetLink, setMeetLink] = useState<string | null>(null);
 
-  // Scroll to top on mount
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
-
-  // Check payment status on mount
-  useEffect(() => {
-    checkPaymentStatus();
-  }, []);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, []);
+  useEffect(() => { checkPaymentStatus(); }, []);
 
   // Handle Stripe callback
   useEffect(() => {
     const payment = searchParams.get('payment');
     const sessionId = searchParams.get('session_id');
-
-    if (payment === 'success' && sessionId) {
-      verifyPayment(sessionId);
-    } else if (payment === 'cancel') {
-      setError('Payment was cancelled. Please try again.');
-      setPaymentState('not_paid');
-    }
+    if (payment === 'success' && sessionId) verifyPayment(sessionId);
+    else if (payment === 'cancel') { setError('Payment cancelled. Try again.'); setPaymentState('not_paid'); }
   }, [searchParams]);
 
-  const checkPaymentStatus = async () => {
-    if (!config.supabaseClient) {
-      setPaymentState('not_paid');
-      return;
-    }
+  // Fetch calendar when paid
+  useEffect(() => { if (paymentState === 'paid') fetchCalendarSlots(); }, [paymentState]);
 
+  /* ── Send Hushh Coins credit email (fire-and-forget) ── */
+  const sendCoinsEmail = async (email: string, name: string, coins: number) => {
+    try {
+      const { data: { session } } = await config.supabaseClient!.auth.getSession();
+      if (!session) return;
+      await fetch(`${config.SUPABASE_URL}/functions/v1/coins-credit-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ recipientEmail: email, recipientName: name, coinsAwarded: coins }),
+      });
+    } catch (err) { console.error('Coins email failed (non-blocking):', err); }
+  };
+
+  /* ── Send Hushh Coins deduction email when meeting is booked (fire-and-forget) ── */
+  const sendCoinsDeductionEmail = async (email: string, name: string, coins: number, meetingDate: string, meetingTime: string) => {
+    try {
+      const { data: { session } } = await config.supabaseClient!.auth.getSession();
+      if (!session) return;
+      await fetch(`${config.SUPABASE_URL}/functions/v1/coins-deduction-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ recipientEmail: email, recipientName: name, coinsDeducted: coins, meetingDate, meetingTime }),
+      });
+    } catch (err) { console.error('Deduction email failed (non-blocking):', err); }
+  };
+
+  /* ── API Handlers ── */
+
+  const checkPaymentStatus = async () => {
+    if (!config.supabaseClient) { setPaymentState('not_paid'); return; }
     try {
       const { data: { user } } = await config.supabaseClient.auth.getUser();
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-
-      // Check if user has already paid
+      if (!user) { navigate('/login'); return; }
       const { data: payment } = await config.supabaseClient
-        .from('ceo_meeting_payments')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
+        .from('ceo_meeting_payments').select('*').eq('user_id', user.id).maybeSingle();
       if (payment?.payment_status === 'completed') {
-        setHushhCoins(payment.hushh_coins_awarded || 100);
-        if (payment.calendly_booked) {
-          setPaymentState('booked');
-        } else {
-          setPaymentState('paid');
-        }
-      } else {
-        setPaymentState('not_paid');
-      }
-    } catch (err) {
-      console.error('Error checking payment status:', err);
-      setPaymentState('not_paid');
-    }
+        setHushhCoins(payment.hushh_coins_awarded || 300000);
+        setPaymentState(payment.calendly_booked ? 'booked' : 'paid');
+      } else { setPaymentState('not_paid'); }
+    } catch { setPaymentState('not_paid'); }
   };
 
   const verifyPayment = async (sessionId: string) => {
-    setPaymentState('verifying');
-    setError(null);
-
-    try {
-      const { data: { session } } = await config.supabaseClient!.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
-      const response = await fetch(
-        `${config.SUPABASE_URL}/functions/v1/onboarding-verify-payment`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ sessionId }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (result.success) {
-        setHushhCoins(result.hushhCoinsAwarded || 100);
-        setPaymentState('paid');
-        // Clear URL params
-        window.history.replaceState({}, '', '/onboarding/meet-ceo');
-      } else {
-        throw new Error(result.error || 'Payment verification failed');
-      }
-    } catch (err: any) {
-      console.error('Payment verification error:', err);
-      setError(err.message || 'Failed to verify payment');
-      setPaymentState('not_paid');
-    }
-  };
-
-  const handlePayment = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data: { session } } = await config.supabaseClient!.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
-      const response = await fetch(
-        `${config.SUPABASE_URL}/functions/v1/onboarding-create-checkout`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({}),
-        }
-      );
-
-      const result = await response.json();
-
-      if (result.alreadyPaid) {
-        setPaymentState('paid');
-        return;
-      }
-
-      if (result.checkoutUrl) {
-        window.location.href = result.checkoutUrl;
-      } else {
-        throw new Error(result.error || 'Failed to create checkout session');
-      }
-    } catch (err: any) {
-      console.error('Payment error:', err);
-      setError(err.message || 'Failed to start payment');
-      setLoading(false);
-    }
-  };
-
-  // Fetch calendar availability when paid
-  const fetchCalendarSlots = async () => {
-    setLoadingSlots(true);
-    try {
-      const response = await fetch(
-        `${config.SUPABASE_URL}/functions/v1/ceo-calendar-booking?days=14`,
-        { method: 'GET' }
-      );
-      const data = await response.json();
-      if (data.success) {
-        setCalendarData(data);
-        // Auto-select first available date
-        if (data.availability?.length > 0) {
-          setSelectedDate(data.availability[0].date);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching calendar slots:', err);
-    } finally {
-      setLoadingSlots(false);
-    }
-  };
-
-  // Book meeting with Google Calendar
-  const handleBookMeeting = async () => {
-    if (!selectedSlot) return;
-    setBookingInProgress(true);
-    setError(null);
-
+    setPaymentState('verifying'); setError(null);
     try {
       const { data: { session } } = await config.supabaseClient!.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-
-      const { data: { user } } = await config.supabaseClient!.auth.getUser();
-      const userName = user?.user_metadata?.full_name || 'Hushh User';
-
-      const response = await fetch(
-        `${config.SUPABASE_URL}/functions/v1/ceo-calendar-booking`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            startTime: selectedSlot.startTime,
-            endTime: selectedSlot.endTime,
-            attendeeName: userName,
-          }),
-        }
-      );
-
-      const result = await response.json();
+      const res = await fetch(`${config.SUPABASE_URL}/functions/v1/onboarding-verify-payment`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ sessionId }),
+      });
+      const result = await res.json();
       if (result.success) {
-        setMeetLink(result.meetLink);
+        const coins = result.hushhCoinsAwarded || 300000;
+        setHushhCoins(coins);
+        setPaymentState('paid');
+        window.history.replaceState({}, '', '/onboarding/meet-ceo');
+        // Send coins credit email after Stripe payment
+        const { data: { user } } = await config.supabaseClient!.auth.getUser();
+        if (user) sendCoinsEmail(user.email || '', user.user_metadata?.full_name || 'Hushh User', coins);
+      } else throw new Error(result.error || 'Verification failed');
+    } catch (err: any) { setError(err.message); setPaymentState('not_paid'); }
+  };
+
+  const handlePayment = async () => {
+    setLoading(true); setError(null);
+    try {
+      const { data: { session } } = await config.supabaseClient!.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const res = await fetch(`${config.SUPABASE_URL}/functions/v1/onboarding-create-checkout`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({}),
+      });
+      const result = await res.json();
+      if (result.alreadyPaid) { setPaymentState('paid'); return; }
+      if (result.checkoutUrl) window.location.href = result.checkoutUrl;
+      else throw new Error(result.error || 'Checkout failed');
+    } catch (err: any) { setError(err.message); setLoading(false); }
+  };
+
+  const handleCouponRedeem = async () => {
+    setCouponError(null);
+    const code = couponCode.trim().toUpperCase();
+    if (!code) { setCouponError('Please enter a coupon code.'); return; }
+    if (code !== VALID_COUPON) { setCouponError('Invalid coupon code. Please try again.'); return; }
+    setCouponLoading(true);
+    try {
+      const { data: { user } } = await config.supabaseClient!.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      // Upsert payment record with coupon
+      await config.supabaseClient!.from('ceo_meeting_payments').upsert({
+        user_id: user.id, payment_status: 'completed', payment_method: 'coupon',
+        coupon_code: code, hushh_coins_awarded: 300000, amount: 0, currency: 'usd',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      setHushhCoins(300000);
+      setPaymentState('paid');
+      // Send coins credit email notification
+      sendCoinsEmail(user.email || '', user.user_metadata?.full_name || 'Hushh User', 300000);
+    } catch (err: any) { setCouponError(err.message || 'Failed to redeem coupon'); }
+    finally { setCouponLoading(false); }
+  };
+
+  const fetchCalendarSlots = async () => {
+    setLoadingSlots(true);
+    try {
+      const { data: { session } } = await config.supabaseClient!.auth.getSession();
+      if (!session) { setLoadingSlots(false); return; }
+      const res = await fetch(`${config.SUPABASE_URL}/functions/v1/ceo-calendar-booking?days=14`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (data.success) { setCalendarData(data); if (data.availability?.length) setSelectedDate(data.availability[0].date); }
+    } catch (err) { console.error('Calendar fetch error:', err); }
+    finally { setLoadingSlots(false); }
+  };
+
+  const handleBookMeeting = async () => {
+    if (!selectedSlot) return;
+    setBookingInProgress(true); setError(null);
+    try {
+      const { data: { session } } = await config.supabaseClient!.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const { data: { user } } = await config.supabaseClient!.auth.getUser();
+      const res = await fetch(`${config.SUPABASE_URL}/functions/v1/ceo-calendar-booking`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ startTime: selectedSlot.startTime, endTime: selectedSlot.endTime, attendeeName: user?.user_metadata?.full_name || 'Hushh User' }),
+      });
+      const result = await res.json();
+      if (result.success) {
         setPaymentState('booked');
-      } else {
-        throw new Error(result.error || 'Booking failed');
-      }
-    } catch (err: any) {
-      console.error('Booking error:', err);
-      setError(err.message || 'Failed to book meeting');
-    } finally {
-      setBookingInProgress(false);
-    }
+        // Send coins deduction email after successful booking
+        const meetingDate = new Date(selectedSlot.startTime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        const meetingTime = `${new Date(selectedSlot.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(selectedSlot.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+        sendCoinsDeductionEmail(user?.email || '', user?.user_metadata?.full_name || 'Hushh User', 300000, meetingDate, meetingTime);
+      } else throw new Error(result.error || 'Booking failed');
+    } catch (err: any) { setError(err.message); }
+    finally { setBookingInProgress(false); }
   };
 
-  // Trigger fetch when paid
-  useEffect(() => {
-    if (paymentState === 'paid') {
-      fetchCalendarSlots();
-    }
-  }, [paymentState]);
+  const handleContinue = () => navigate('/hushh-user-profile');
+  const handleBack = () => navigate('/onboarding/step-13');
 
-  const handleCalendlyBooked = async () => {
-    // Mark as booked in database
-    if (config.supabaseClient) {
-      const { data: { user } } = await config.supabaseClient.auth.getUser();
-      if (user) {
-        await config.supabaseClient
-          .from('ceo_meeting_payments')
-          .update({ calendly_booked: true, updated_at: new Date().toISOString() })
-          .eq('user_id', user.id);
-      }
-    }
-    setPaymentState('booked');
-  };
-
-  const handleContinueToProfile = () => {
-    navigate('/hushh-user-profile');
-  };
-
-  const handleSkipPaymentForNow = () => {
-    sessionStorage.setItem('meet_ceo_payment_skipped', 'true');
-    navigate('/hushh-user-profile');
-  };
-
-  const handleBack = () => {
-    navigate('/onboarding/step-13');
-  };
-
-  // Loading/Verifying state with shimmer
+  /* ── Shimmer Loader ── */
   if (paymentState === 'loading' || paymentState === 'verifying') {
     return (
-      <ShimmerLoader 
-        message={paymentState === 'verifying' ? 'Verifying your payment...' : 'Loading...'} 
-      />
+      <div className="bg-white min-h-screen flex flex-col antialiased selection:bg-black selection:text-white">
+        <HushhTechBackHeader onBackClick={handleBack} rightLabel="FAQs" />
+        <div className="flex-1 flex items-center justify-center px-6">
+          <div className="text-center">
+            <div className="w-14 h-14 mx-auto mb-6 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
+            <p className="text-sm text-gray-500 font-medium lowercase">{paymentState === 'verifying' ? 'verifying payment...' : 'loading...'}</p>
+          </div>
+        </div>
+      </div>
     );
   }
 
+  /* ── RENDER ── */
   return (
-    <div 
-      className="bg-slate-50 min-h-screen"
-      style={{ fontFamily: "'Manrope', sans-serif" }}
-    >
-      <div className="onboarding-shell relative flex min-h-screen w-full flex-col bg-white max-w-[500px] mx-auto shadow-xl overflow-hidden border-x border-slate-100">
-        
-        {/* Sticky Header */}
-        <header className="flex items-center px-4 pt-4 pb-2 bg-white sticky top-0 z-10">
-          <button 
-            onClick={handleBack}
-            aria-label="Go back"
-            className="flex size-10 shrink-0 items-center justify-center text-slate-900 rounded-full hover:bg-slate-50 transition-colors"
-          >
-            <BackIcon />
-          </button>
-        </header>
+    <div className="bg-white text-gray-900 min-h-screen antialiased flex flex-col selection:bg-black selection:text-white">
+      <HushhTechBackHeader onBackClick={handleBack} rightLabel="FAQs" />
 
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col px-4 sm:px-6 pb-44 sm:pb-52">
-          {error && (
-            <div 
-              className="mb-6 p-4 rounded-xl text-center border border-red-200 bg-red-50"
-            >
-              <p className="text-red-700 text-sm font-medium">{error}</p>
+      <main className="px-6 flex-grow max-w-md mx-auto w-full pb-48">
+        {/* ── Title Section ── */}
+        <section className="py-8">
+          <h3 className="text-[11px] tracking-wide text-gray-500 lowercase mb-4 font-semibold">verification</h3>
+          <h1 className="text-[2.75rem] leading-[1.1] font-normal text-black tracking-tight lowercase" style={{ fontFamily: "'Playfair Display', serif" }}>
+            meet your
+            <br />
+            <span className="text-gray-400 italic font-normal">fund manager</span>
+          </h1>
+        </section>
+
+        {/* Error */}
+        {error && (
+          <div className="mb-6 flex items-center gap-3 py-4 px-1 border-b border-red-100">
+            <div className="w-10 h-10 rounded-full bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-red-500 text-lg" style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}>error</span>
             </div>
-          )}
+            <p className="text-sm font-medium text-red-700 lowercase">{error}</p>
+          </div>
+        )}
 
-          {/* Not Paid State */}
-          {paymentState === 'not_paid' && (
-            <>
-              {/* Header Section */}
-              <div className="mb-6 mt-2 flex flex-col items-center text-center">
-                {/* Shield Icon */}
-                <div className="w-16 h-16 rounded-full bg-[#2b8cee]/10 flex items-center justify-center mb-4">
-                  <ShieldCheckIcon className="text-[#2b8cee]" />
+        {/* ═══ NOT PAID STATE ═══ */}
+        {paymentState === 'not_paid' && (
+          <>
+            {/* Manager intro */}
+            <div className="py-5 border-b border-gray-200">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-black flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-white text-2xl" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>person</span>
                 </div>
-                <h1 className="text-slate-900 text-[22px] font-extrabold leading-tight tracking-tight mb-2">
-                  Complete Registration
-                </h1>
-                <p className="text-slate-500 text-sm font-medium">
-                  One-time $1 human verification
-                </p>
-              </div>
-
-              {/* Human Verification Card */}
-              <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center flex-shrink-0">
-                    <ShieldCheckIcon className="text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h2 className="text-slate-900 text-base font-bold mb-1">
-                      Human Verification
-                    </h2>
-                    <p className="text-slate-500 text-xs font-medium mb-3">
-                      A small step to confirm you're a real person
-                    </p>
-                    <p className="text-slate-600 text-sm leading-relaxed">
-                      To complete your Hushh Fund A registration, we require a simple $1 verification. This helps us filter out bots, scammers, and automated requests.
-                    </p>
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-semibold text-gray-900 block">Manish Sainani</span>
+                  <span className="text-xs text-gray-500 font-medium lowercase">hedge fund manager · 1-hour private session</span>
                 </div>
               </div>
+            </div>
 
-              {/* Benefits Card */}
-              <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                <div className="flex items-center gap-2 mb-3">
-                  <StarIcon className="text-[#2b8cee]" />
-                  <h3 className="text-slate-900 text-base font-bold">
-                    You'll Also Receive
-                  </h3>
-                </div>
-                <p className="text-slate-400 text-xs font-medium mb-4">
-                  As a thank you for completing verification
-                </p>
-                
-                <div className="space-y-4">
-                  {/* Benefit 1: Hushh Coins */}
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#2b8cee]/10 flex items-center justify-center flex-shrink-0">
-                      <CoinIcon className="text-[#2b8cee]" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-slate-900 text-sm font-bold">
-                        Earn 100 Hushh Coins
-                      </p>
-                      <p className="text-slate-500 text-xs font-medium">
-                        Credited instantly to your account
-                      </p>
-                    </div>
+            {/* Story card */}
+            <div className="my-6 bg-gray-50 rounded-2xl p-6 border border-gray-200">
+              <p className="text-sm text-gray-700 leading-relaxed mb-3 lowercase">
+                a personal consultation with manish typically costs <span className="font-bold text-gray-900">$3,000</span> per session.
+              </p>
+              <p className="text-sm text-gray-700 leading-relaxed mb-3 lowercase">
+                because you've completed the full hushh kyc onboarding, you've unlocked this as an <span className="font-semibold text-gray-900">exclusive benefit</span> — available for just <span className="font-bold text-black">$1</span>.
+              </p>
+              <p className="text-xs text-gray-500 leading-relaxed lowercase">
+                your opportunity to sit 1-on-1 with a fund manager for investment strategies, portfolio allocation, and personalized guidance.
+              </p>
+            </div>
+
+            {/* What you unlock — list style */}
+            <section className="space-y-0 mb-6">
+              <div className="py-4">
+                <h3 className="text-[11px] tracking-wide text-gray-500 lowercase font-semibold">what you unlock</h3>
+              </div>
+
+              <div className="py-5 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-white text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_month</span>
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-gray-900 lowercase block">1-hour private consultation</span>
+                    <span className="text-xs text-gray-500 font-medium lowercase">with manish sainani</span>
+                  </div>
+                  <span className="text-xs font-medium text-gray-400 line-through">$3,000</span>
+                </div>
+              </div>
 
-                  {/* Benefit 2: CEO Access */}
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#2b8cee]/10 flex items-center justify-center flex-shrink-0">
-                      <CalendarIcon className="text-[#2b8cee]" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-slate-900 text-sm font-bold">
-                        Direct CEO Access
-                      </p>
-                      <p className="text-slate-500 text-xs font-medium">
-                        Book a 1-hour deep dive with Manish
-                      </p>
-                    </div>
+              <div className="py-5 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-gray-700 text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>monetization_on</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-gray-900 lowercase block">300,000 hushh coins</span>
+                    <span className="text-xs text-gray-500 font-medium lowercase">credited instantly</span>
                   </div>
                 </div>
               </div>
-            </>
-          )}
 
-          {/* Paid State - Show Google Calendar Booking */}
-          {paymentState === 'paid' && (
-            <>
-              {/* Success Message */}
-              <div className="mb-6 mt-2 flex flex-col items-center text-center">
-                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
-                  <CheckIcon className="text-green-600" />
-                </div>
-                <h1 className="text-slate-900 text-[22px] font-extrabold leading-tight tracking-tight mb-2">
-                  Registration Complete!
-                </h1>
-                <p className="text-slate-500 text-sm font-medium">
-                  You've earned <span className="font-bold text-slate-900">{hushhCoins} Hushh Coins</span>
-                </p>
-              </div>
-
-              {/* Calendar Booking Header */}
-              <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4 text-center shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                <h2 className="text-slate-900 text-base font-bold mb-2">
-                  Book Your 1-Hour Deep Dive
-                </h2>
-                <p className="text-slate-500 text-sm">
-                  Schedule office hours with {calendarData?.ceo.name || 'Manish Sainani'}
-                </p>
-                {calendarData?.timezone && (
-                  <p className="text-slate-400 text-xs mt-1">
-                    Times shown in {calendarData.timezone}
-                  </p>
-                )}
-              </div>
-
-              {/* Loading State */}
-              {loadingSlots && (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <div className="relative w-12 h-12 mb-4">
-                    <div className="absolute inset-0 rounded-full border-4 border-slate-200" />
-                    <div className="absolute inset-0 rounded-full border-4 border-t-[#2b8cee] animate-spin" />
+              <div className="py-5 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-gray-700 text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
                   </div>
-                  <p className="text-slate-500 text-sm">Loading available times...</p>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-gray-900 lowercase block">kyc verified badge</span>
+                    <span className="text-xs text-gray-500 font-medium lowercase">identity verification complete</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Price card */}
+            <section className="mb-6">
+              <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
+                <div className="flex flex-col items-center text-center gap-1">
+                  <span className="text-[11px] tracking-wide text-gray-500 lowercase font-semibold">your price today</span>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-4xl font-bold text-black tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>$1</span>
+                    <span className="text-sm text-gray-400 line-through">$3,000</span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 lowercase font-medium mt-1">exclusive kyc onboarding benefit</span>
+                </div>
+              </div>
+            </section>
+
+            {/* CTA */}
+            <section className="pb-6 space-y-3">
+              <HushhTechCta variant={HushhTechCtaVariant.BLACK} onClick={handlePayment} disabled={loading}>
+                {loading ? 'Redirecting...' : 'Verify & Unlock — $1'}
+              </HushhTechCta>
+            </section>
+
+            {/* Coupon Section */}
+            <div className="mb-6">
+              <button onClick={() => setShowCoupon(!showCoupon)} className="w-full flex items-center justify-center gap-1.5 py-2 text-sm text-gray-700 font-semibold lowercase active:opacity-60">
+                <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'wght' 400" }}>confirmation_number</span>
+                {showCoupon ? 'hide coupon code' : 'have a coupon code?'}
+              </button>
+
+              {showCoupon && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text" value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(null); }}
+                      placeholder="enter coupon code"
+                      className="flex-1 h-12 px-4 rounded-xl bg-white border border-gray-200 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-black focus:ring-1 focus:ring-black font-mono tracking-widest lowercase"
+                      autoCapitalize="characters" autoComplete="off"
+                    />
+                    <button onClick={handleCouponRedeem} disabled={couponLoading || !couponCode.trim()}
+                      className="h-12 px-5 rounded-xl bg-black text-white text-sm font-semibold disabled:bg-gray-300 active:scale-[0.97] transition-all">
+                      {couponLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'apply'}
+                    </button>
+                  </div>
+                  {couponError && <p className="text-xs text-red-500 text-center font-medium lowercase">{couponError}</p>}
                 </div>
               )}
+            </div>
 
-              {/* Calendar Booking UI */}
-              {!loadingSlots && calendarData && (
-                <div className="space-y-4 mb-6">
-                  {/* Date Selection */}
-                  <div className="overflow-x-auto pb-2 -mx-2 px-2">
-                    <div className="flex gap-2">
-                      {calendarData.availability.map((day) => {
-                        const date = new Date(day.date);
-                        const isSelected = selectedDate === day.date;
-                        const hasSlots = day.slots.some(s => s.available);
+            {/* Security badge */}
+            <section className="flex flex-col items-center text-center gap-1 pb-8">
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px] text-gray-600">lock</span>
+                <span className="text-[10px] text-gray-600 tracking-wide uppercase font-medium">secure payment</span>
+              </div>
+              <p className="text-[10px] text-gray-400 lowercase font-medium">powered by stripe</p>
+            </section>
+          </>
+        )}
+
+        {/* ═══ PAID STATE — Calendar Booking ═══ */}
+        {paymentState === 'paid' && (
+          <>
+            <div className="py-5 border-b border-gray-200 mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-green-50 border border-green-200 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-green-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}>check_circle</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-semibold text-gray-900 block lowercase">you're verified!</span>
+                  <span className="text-xs text-gray-500 font-medium lowercase"><span className="font-bold text-gray-900">{hushhCoins.toLocaleString()} hushh coins</span> credited</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-6 bg-gray-50 rounded-2xl p-5 border border-gray-200 text-center">
+              <span className="text-sm font-semibold text-gray-900 lowercase block mb-1">schedule your consultation</span>
+              <span className="text-xs text-gray-500 font-medium lowercase">book a 1-hour session with {calendarData?.ceo.name || 'manish sainani'}</span>
+              {calendarData?.timezone && <p className="text-[10px] text-gray-400 mt-1 lowercase">{calendarData.timezone}</p>}
+            </div>
+
+            {loadingSlots && (
+              <div className="flex flex-col items-center py-12">
+                <div className="w-10 h-10 border-4 border-gray-200 border-t-black rounded-full animate-spin mb-3" />
+                <p className="text-xs text-gray-500 lowercase">loading times...</p>
+              </div>
+            )}
+
+            {!loadingSlots && calendarData && (
+              <div className="space-y-4 mb-8">
+                {/* Date pills */}
+                <div className="overflow-x-auto pb-2 -mx-2 px-2">
+                  <div className="flex gap-2">
+                    {calendarData.availability.map((day) => {
+                      const d = new Date(day.date);
+                      const sel = selectedDate === day.date;
+                      const has = day.slots.some(s => s.available);
+                      return (
+                        <button key={day.date} onClick={() => { setSelectedDate(day.date); setSelectedSlot(null); }} disabled={!has}
+                          className={`shrink-0 flex flex-col items-center p-2.5 rounded-xl min-w-[62px] border-2 transition-all ${sel ? 'border-black bg-gray-50' : has ? 'border-gray-200 active:bg-gray-50' : 'border-transparent opacity-40'}`}>
+                          <span className="text-[10px] font-medium text-gray-500 uppercase">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                          <span className={`text-[18px] font-bold ${sel ? 'text-black' : 'text-gray-900'}`}>{d.getDate()}</span>
+                          <span className="text-[10px] text-gray-500">{d.toLocaleDateString('en-US', { month: 'short' })}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Time slots */}
+                {selectedDate && (
+                  <div className="rounded-xl border border-gray-200 p-3">
+                    <p className="text-xs font-semibold text-gray-900 mb-2 lowercase">available times</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {calendarData.availability.find(d => d.date === selectedDate)?.slots.filter(s => s.available).map(slot => {
+                        const t = new Date(slot.startTime);
+                        const sel = selectedSlot?.startTime === slot.startTime;
                         return (
-                          <button
-                            key={day.date}
-                            onClick={() => {
-                              setSelectedDate(day.date);
-                              setSelectedSlot(null);
-                            }}
-                            disabled={!hasSlots}
-                            className={`flex-shrink-0 flex flex-col items-center p-3 rounded-xl border-2 min-w-[70px] transition-all ${
-                              isSelected
-                                ? 'border-[#2b8cee] bg-[#2b8cee]/5'
-                                : hasSlots
-                                ? 'border-slate-200 hover:border-slate-300'
-                                : 'border-slate-100 bg-slate-50 opacity-50'
-                            }`}
-                          >
-                            <span className="text-[10px] font-medium text-slate-400 uppercase">
-                              {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                            </span>
-                            <span className={`text-lg font-bold ${isSelected ? 'text-[#2b8cee]' : 'text-slate-900'}`}>
-                              {date.getDate()}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {date.toLocaleDateString('en-US', { month: 'short' })}
-                            </span>
+                          <button key={slot.startTime} onClick={() => setSelectedSlot(slot)}
+                            className={`py-2 px-2 rounded-lg text-xs font-semibold transition-all lowercase ${sel ? 'bg-black text-white' : 'bg-gray-50 text-gray-900 active:bg-gray-200'}`}>
+                            {t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                           </button>
                         );
                       })}
                     </div>
-                  </div>
-
-                  {/* Time Slots */}
-                  {selectedDate && (
-                    <div className="bg-white border border-slate-200 rounded-xl p-4">
-                      <h3 className="text-sm font-bold text-slate-900 mb-3">
-                        Available Times
-                      </h3>
-                      <div className="grid grid-cols-3 gap-2">
-                        {calendarData.availability
-                          .find(d => d.date === selectedDate)
-                          ?.slots.filter(slot => slot.available)
-                          .map((slot) => {
-                            const time = new Date(slot.startTime);
-                            const isSelected = selectedSlot?.startTime === slot.startTime;
-                            return (
-                              <button
-                                key={slot.startTime}
-                                onClick={() => setSelectedSlot(slot)}
-                                className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                                  isSelected
-                                    ? 'bg-[#2b8cee] text-white'
-                                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                                }`}
-                              >
-                                {time.toLocaleTimeString('en-US', {
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                  hour12: true,
-                                })}
-                              </button>
-                            );
-                          })}
-                      </div>
-                      {calendarData.availability
-                        .find(d => d.date === selectedDate)
-                        ?.slots.filter(slot => slot.available).length === 0 && (
-                        <p className="text-slate-400 text-sm text-center py-4">
-                          No available slots on this day
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Selected Slot Summary */}
-                  {selectedSlot && (
-                    <div className="bg-[#2b8cee]/5 border border-[#2b8cee]/20 rounded-xl p-4">
-                      <div className="flex items-center gap-3">
-                        <CalendarIcon className="text-[#2b8cee]" />
-                        <div>
-                          <p className="text-sm font-bold text-slate-900">
-                            {new Date(selectedSlot.startTime).toLocaleDateString('en-US', {
-                              weekday: 'long',
-                              month: 'long',
-                              day: 'numeric',
-                            })}
-                          </p>
-                          <p className="text-sm text-slate-600">
-                            {new Date(selectedSlot.startTime).toLocaleTimeString('en-US', {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                              hour12: true,
-                            })} - {new Date(selectedSlot.endTime).toLocaleTimeString('en-US', {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                              hour12: true,
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Booked State */}
-          {paymentState === 'booked' && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
-              <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-6">
-                <CheckIcon className="text-green-600" />
-              </div>
-              <h1 className="text-slate-900 text-[22px] font-extrabold leading-tight tracking-tight mb-2">
-                All Set!
-              </h1>
-              <p className="text-slate-500 text-sm font-medium mb-2">
-                Your meeting is scheduled with Manish Sainani.
-              </p>
-              <p className="text-slate-500 text-sm">
-                You've earned <span className="font-bold text-slate-900">{hushhCoins} Hushh Coins</span>!
-              </p>
-            </div>
-          )}
-        </main>
-
-        {/* Fixed Footer - Hidden when main footer is visible */}
-        {!isFooterVisible && (
-          <div
-            className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-[500px] mx-auto border-t border-slate-100 bg-white/90 backdrop-blur-md px-4 sm:px-6 pt-4 sm:pt-5 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-[0_-4px_20px_rgba(0,0,0,0.04)]"
-            data-onboarding-footer
-          >
-            {/* Not Paid Footer */}
-            {paymentState === 'not_paid' && (
-              <>
-                {/* Buttons */}
-                <div className="flex flex-col gap-3">
-                  {/* Payment Button */}
-                  <button
-                    onClick={handlePayment}
-                    disabled={loading}
-                    data-onboarding-cta
-                    className="flex w-full h-11 sm:h-12 cursor-pointer items-center justify-center rounded-full bg-[#2b8cee] px-6 text-white text-sm sm:text-base font-semibold transition-all hover:bg-[#2070c0] active:scale-[0.98] disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                  >
-                    {loading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        Redirecting...
-                      </span>
-                    ) : (
-                      'Complete Registration - $1'
+                    {calendarData.availability.find(d => d.date === selectedDate)?.slots.filter(s => s.available).length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-4 lowercase">no slots available</p>
                     )}
-                  </button>
+                  </div>
+                )}
 
-                  {/* Skip for testing */}
-                  <button
-                    onClick={handleSkipPaymentForNow}
-                    disabled={loading}
-                    className="flex w-full h-11 sm:h-12 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-slate-700 text-sm font-semibold transition-all hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    Skip for now
-                  </button>
+                {/* Selected summary */}
+                {selectedSlot && (
+                  <div className="py-4 px-1 border-b border-gray-200 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-white text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>event_available</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 lowercase">{new Date(selectedSlot.startTime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                      <p className="text-xs text-gray-500 lowercase">{new Date(selectedSlot.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} – {new Date(selectedSlot.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</p>
+                    </div>
+                  </div>
+                )}
 
-                  {/* Back Button */}
-                  <button
-                    onClick={handleBack}
-                    disabled={loading}
-                    className="flex w-full cursor-pointer items-center justify-center rounded-full bg-transparent py-2 text-slate-500 text-sm font-semibold hover:text-slate-800 transition-colors"
-                  >
-                    Back
-                  </button>
-                </div>
-
-                {/* Security Notice */}
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <LockIcon className="text-slate-400" />
-                  <p className="text-[10px] text-slate-400 leading-tight">
-                    Secure payment powered by Stripe
-                  </p>
-                </div>
-              </>
-            )}
-
-            {/* Paid Footer */}
-            {paymentState === 'paid' && (
-              <div className="flex flex-col gap-3">
-                <button
-                  onClick={handleBookMeeting}
-                  disabled={!selectedSlot || bookingInProgress}
-                  data-onboarding-cta
-                  className="flex w-full h-11 sm:h-12 cursor-pointer items-center justify-center rounded-full bg-[#2b8cee] px-6 text-white text-sm sm:text-base font-semibold transition-all hover:bg-[#2070c0] active:scale-[0.98] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
-                >
-                  {bookingInProgress ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Booking...
-                    </span>
-                  ) : selectedSlot ? (
-                    'Confirm Booking'
-                  ) : (
-                    'Select a Time Slot'
-                  )}
-                </button>
-
-                <button
-                  onClick={handleContinueToProfile}
-                  disabled={bookingInProgress}
-                  className="flex w-full cursor-pointer items-center justify-center rounded-full bg-transparent py-2 text-slate-500 text-sm font-semibold hover:text-slate-800 transition-colors"
-                >
-                  Skip - I'll book later
-                </button>
+                <section className="space-y-3 pt-4">
+                  <HushhTechCta variant={HushhTechCtaVariant.BLACK} onClick={handleBookMeeting} disabled={!selectedSlot || bookingInProgress}>
+                    {bookingInProgress ? 'Booking...' : selectedSlot ? 'Confirm Booking' : 'Select a Time'}
+                  </HushhTechCta>
+                  <HushhTechCta variant={HushhTechCtaVariant.WHITE} onClick={handleContinue}>
+                    I'll Book Later
+                  </HushhTechCta>
+                </section>
               </div>
             )}
+          </>
+        )}
 
-            {/* Booked Footer */}
-              {paymentState === 'booked' && (
-                <button
-                  onClick={handleContinueToProfile}
-                  data-onboarding-cta
-                  className="flex w-full h-11 sm:h-12 cursor-pointer items-center justify-center rounded-full bg-[#2b8cee] px-6 text-white text-sm sm:text-base font-semibold transition-all hover:bg-[#2070c0] active:scale-[0.98]"
-                >
-                  Continue to My Profile
-                </button>
-              )}
+        {/* ═══ BOOKED STATE ═══ */}
+        {paymentState === 'booked' && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-green-50 border border-green-200 flex items-center justify-center">
+              <span className="material-symbols-outlined text-green-600 text-[44px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}>task_alt</span>
+            </div>
+            <h1 className="text-3xl font-normal text-black tracking-tight mb-2 lowercase" style={{ fontFamily: "'Playfair Display', serif" }}>all set!</h1>
+            <p className="text-sm text-gray-500 mb-1 lowercase">your consultation is scheduled with</p>
+            <p className="text-base font-semibold text-black">Manish Sainani</p>
+            <p className="text-xs text-gray-500 mt-1 lowercase">{hushhCoins.toLocaleString()} hushh coins earned 🪙</p>
+
+            <section className="w-full space-y-3 mt-8">
+              <HushhTechCta variant={HushhTechCtaVariant.BLACK} onClick={handleContinue}>
+                Continue to Profile
+              </HushhTechCta>
+            </section>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

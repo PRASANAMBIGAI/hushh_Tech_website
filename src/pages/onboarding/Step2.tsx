@@ -5,28 +5,34 @@ import { upsertOnboardingData } from '../../services/onboarding/upsertOnboarding
 import type { ReferralSource } from '../../types/onboarding';
 import { useFooterVisibility } from '../../utils/useFooterVisibility';
 
-// Back arrow icon
-const BackIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M15 18l-6-6 6-6" />
-  </svg>
-);
+/* ═══════════════════════════════════════════════
+   TYPES & CONSTANTS
+   ═══════════════════════════════════════════════ */
 
-// Referral options matching the HTML template
+const CURRENT_STEP = 2;
+const TOTAL_STEPS = 12;
+const PROGRESS_PCT = Math.round((CURRENT_STEP / TOTAL_STEPS) * 100);
+
 interface ReferralOption {
   value: ReferralSource;
   label: string;
-  description?: string;
+  icon: string; // Material Symbols icon name
+  iconBg: string;
+  iconColor: string;
 }
 
 const referralOptions: ReferralOption[] = [
-  { value: 'social_media_ad', label: 'Social Media', description: 'Instagram, TikTok, Twitter' },
-  { value: 'family_friend', label: 'Friend or Family' },
-  { value: 'podcast', label: 'Podcast' },
-  { value: 'website_blog_article', label: 'News Article' },
-  { value: 'ai_tool', label: 'Google Search' },
-  { value: 'other', label: 'Other' },
+  { value: 'social_media_ad', label: 'Social Media', icon: 'smartphone', iconBg: 'bg-blue-100', iconColor: 'text-[#007AFF]' },
+  { value: 'family_friend', label: 'Friend or Family', icon: 'group', iconBg: 'bg-green-100', iconColor: 'text-green-600' },
+  { value: 'podcast', label: 'Podcast', icon: 'mic', iconBg: 'bg-purple-100', iconColor: 'text-purple-600' },
+  { value: 'website_blog_article', label: 'News Article', icon: 'article', iconBg: 'bg-gray-100', iconColor: 'text-gray-600' },
+  { value: 'ai_tool', label: 'Google Search', icon: 'search', iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600' },
+  { value: 'other', label: 'Other', icon: 'add', iconBg: 'bg-gray-100', iconColor: 'text-gray-600' },
 ];
+
+/* ═══════════════════════════════════════════════
+   COMPONENT
+   ═══════════════════════════════════════════════ */
 
 export default function OnboardingStep2() {
   const navigate = useNavigate();
@@ -35,37 +41,34 @@ export default function OnboardingStep2() {
   const [isLoading, setIsLoading] = useState(false);
   const isFooterVisible = useFooterVisibility();
 
+  /* ─── Scroll to top ─── */
   useEffect(() => {
-    // Scroll to top on component mount
     window.scrollTo(0, 0);
   }, []);
 
+  /* ─── Load user + existing data ─── */
   useEffect(() => {
     const getCurrentUser = async () => {
       if (!config.supabaseClient) return;
-      
+
       const { data: { user } } = await config.supabaseClient.auth.getUser();
-      if (!user) {
-        navigate('/login');
-        return;
-      }
+      if (!user) { navigate('/login'); return; }
       setUserId(user.id);
 
-      // Load existing data if any
       const { data: onboardingData } = await config.supabaseClient
         .from('onboarding_data')
         .select('referral_source')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (onboardingData?.referral_source) {
         setSelectedSource(onboardingData.referral_source as ReferralSource);
       }
     };
-
     getCurrentUser();
   }, [navigate]);
 
+  /* ─── Handlers ─── */
   const handleContinue = async () => {
     if (!userId || !config.supabaseClient || !selectedSource) return;
 
@@ -75,8 +78,7 @@ export default function OnboardingStep2() {
         referral_source: selectedSource,
         current_step: 2,
       });
-
-      navigate('/onboarding/step-4');
+      navigate('/onboarding/step-3');
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -92,134 +94,140 @@ export default function OnboardingStep2() {
         console.error('Error:', error);
       }
     }
-    navigate('/onboarding/step-4');
+    navigate('/onboarding/step-3');
   };
 
-  const handleBack = () => {
-    navigate('/onboarding/step-1');
-  };
+  const handleBack = () => navigate('/onboarding/step-1');
 
+  /* ═══════════════════════════════════════════════
+     RENDER
+     ═══════════════════════════════════════════════ */
   return (
-    <div 
-      className="bg-slate-50 min-h-screen"
-      style={{ fontFamily: "'Manrope', sans-serif" }}
+    <div
+      className="bg-white min-h-[100dvh] flex flex-col"
+      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif", WebkitFontSmoothing: 'antialiased' }}
     >
-      <div className="onboarding-shell relative flex min-h-screen w-full flex-col bg-white max-w-[500px] mx-auto shadow-xl overflow-hidden border-x border-slate-100">
-        
-        {/* Sticky Header */}
-        <header className="flex items-center px-4 pt-4 pb-3 sm:pt-6 sm:pb-4 bg-white/95 backdrop-blur-sm sticky top-0 z-10">
-          <button 
-            onClick={handleBack}
-            className="flex items-center gap-1 text-slate-900 hover:text-[#2b8cee] transition-colors"
-          >
-            <BackIcon />
-            <span className="text-base font-bold tracking-tight">Back</span>
-          </button>
-          <div className="flex-1" />
-        </header>
+      {/* ═══ iOS Navigation Bar ═══ */}
+      <nav
+        className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#C6C6C8]/30 flex items-end justify-between px-4 pb-2"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 12px) + 4px)', minHeight: '48px' }}
+      >
+        <button onClick={handleBack} className="text-[#007AFF] flex items-center -ml-2 active:opacity-50 transition-opacity" aria-label="Go back">
+          <span className="material-symbols-outlined text-3xl -mr-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>chevron_left</span>
+          <span className="text-[17px] leading-none pb-[2px]">Back</span>
+        </button>
+        <span className="font-semibold text-[17px] text-black">Setup</span>
+        <button onClick={handleSkip} className="text-[17px] text-[#007AFF] font-normal active:opacity-50 transition-opacity">Skip</button>
+      </nav>
 
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col px-4 sm:px-6 pb-40 sm:pb-48">
-          {/* Headline */}
-          <div className="flex flex-col items-center text-center mt-2 mb-8">
-            <h1 className="text-slate-900 tracking-tight text-[22px] font-extrabold leading-[1.2] max-w-[320px]">
-              How did you hear about Hushh Fund A?
-            </h1>
+      {/* ═══ Main Content ═══ */}
+      <main className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 pt-4 pb-52">
+        {/* ─── Progress Bar ─── */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[13px] font-medium tracking-wide text-[#8E8E93] uppercase">
+              Onboarding Progress
+            </span>
+            <span className="text-[13px] font-medium text-[#8E8E93]">
+              Step {CURRENT_STEP}/{TOTAL_STEPS}
+            </span>
           </div>
-
-          {/* Radio Options Cards */}
-          <div className="flex flex-col gap-4 w-full">
-            {referralOptions.map((option) => {
-              const isSelected = selectedSource === option.value;
-              
-              return (
-                <label
-                  key={option.value}
-                  className={`
-                    group relative flex items-center justify-between gap-4 rounded-xl border-2 bg-white p-4 cursor-pointer transition-all duration-200
-                    ${isSelected 
-                      ? 'border-[#2b8cee] shadow-[0_2px_8px_rgba(43,140,238,0.15)]' 
-                      : 'border-slate-200 hover:border-slate-300'
-                    }
-                  `}
-                >
-                  <div className="flex grow flex-col">
-                    <p className={`text-slate-900 text-base leading-normal ${isSelected ? 'font-bold' : 'font-medium'}`}>
-                      {option.label}
-                    </p>
-                    {option.description && (
-                      <p className="text-slate-500 text-sm font-medium">
-                        {option.description}
-                      </p>
-                    )}
-                  </div>
-                  
-                  {/* Custom Radio Button */}
-                  <input
-                    type="radio"
-                    name="referral-source"
-                    value={option.value}
-                    checked={isSelected}
-                    onChange={() => setSelectedSource(option.value)}
-                    className="sr-only"
-                  />
-                  <div 
-                    className={`
-                      w-6 h-6 rounded-full border-2 relative transition-all duration-200 shrink-0
-                      ${isSelected 
-                        ? 'border-[#2b8cee]' 
-                        : 'border-slate-200'
-                      }
-                    `}
-                  >
-                    {isSelected && (
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-[#2b8cee] rounded-full" />
-                    )}
-                  </div>
-                </label>
-              );
-            })}
+          <div className="w-full bg-gray-200 rounded-full h-1">
+            <div
+              className="bg-[#007AFF] h-1 rounded-full transition-all duration-500"
+              style={{ width: `${PROGRESS_PCT}%` }}
+            />
           </div>
-        </main>
+          <p className="text-[#007AFF] text-xs font-medium mt-2">
+            {PROGRESS_PCT}% complete
+          </p>
+        </div>
 
-        {/* Fixed Footer - Hidden when main footer is visible */}
-        {!isFooterVisible && (
-          <div
-            className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-[500px] mx-auto border-t border-slate-100 bg-white/90 backdrop-blur-md px-4 sm:px-6 pt-4 sm:pt-5 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-[0_-4px_20px_rgba(0,0,0,0.04)]"
-            data-onboarding-footer
-          >
-            {/* Buttons */}
-            <div className="flex flex-col gap-3 sm:gap-4">
-              {/* Continue Button */}
-              <button
-                onClick={handleContinue}
-                disabled={!selectedSource || isLoading}
-                data-onboarding-cta
-                className={`flex w-full h-11 sm:h-12 cursor-pointer items-center justify-center rounded-full bg-[#2b8cee] px-6 text-white text-sm sm:text-base font-semibold transition-all hover:bg-[#2070c0] active:scale-[0.98] disabled:bg-slate-100 disabled:text-slate-400 ${
-                  !selectedSource || isLoading ? 'disabled:cursor-not-allowed' : ''
+        {/* ─── Title ─── */}
+        <h1 className="text-[34px] leading-[41px] font-bold text-black mb-8 tracking-tight">
+          How did you hear about Hushh Fund&nbsp;A?
+        </h1>
+
+        {/* ─── iOS Grouped Table ─── */}
+        <div className="bg-white rounded-xl overflow-hidden shadow-sm">
+          {referralOptions.map((option, idx) => {
+            const isSelected = selectedSource === option.value;
+            const isLast = idx === referralOptions.length - 1;
+
+            return (
+              <label
+                key={option.value}
+                className={`group flex items-center p-4 cursor-pointer active:bg-gray-100 transition-colors relative ${
+                  !isLast ? 'border-b border-[#C6C6C8]/30' : ''
                 }`}
               >
-                {isLoading ? 'Saving...' : 'Continue'}
-              </button>
+                {/* Icon */}
+                <div className={`w-8 h-8 rounded-lg ${option.iconBg} flex items-center justify-center mr-4 shrink-0 ${option.iconColor}`}>
+                  <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>
+                    {option.icon}
+                  </span>
+                </div>
 
-              {/* Skip Button */}
-              <button
-                onClick={handleSkip}
-                className="flex w-full cursor-pointer items-center justify-center rounded-full bg-transparent py-2 text-slate-500 text-sm font-semibold hover:text-slate-800 transition-colors"
-              >
-                Skip
-              </button>
-            </div>
+                {/* Label */}
+                <span className="text-[17px] font-medium text-black flex-grow">
+                  {option.label}
+                </span>
 
-            {/* Footer Note */}
-            <div className="mt-3 sm:mt-4 text-center">
-              <p className="text-[10px] text-slate-400 leading-tight">
-                This helps us understand how you discovered us
-              </p>
-            </div>
+                {/* Hidden radio */}
+                <input
+                  type="radio"
+                  name="referral-source"
+                  value={option.value}
+                  checked={isSelected}
+                  onChange={() => setSelectedSource(option.value)}
+                  className="sr-only"
+                />
+
+                {/* Circle radio indicator */}
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
+                  isSelected ? 'border-[#007AFF] bg-[#007AFF]' : 'border-gray-300'
+                }`}>
+                  {isSelected && (
+                    <span className="material-symbols-outlined text-white text-[16px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 700" }}>
+                      check
+                    </span>
+                  )}
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </main>
+
+      {/* ═══ Fixed Footer ═══ */}
+      {!isFooterVisible && (
+        <div
+          className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-[#C6C6C8]/30 z-40"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+          data-onboarding-footer
+        >
+          <div className="max-w-md mx-auto flex gap-3">
+            <button
+              onClick={handleSkip}
+              className="flex-1 h-[50px] rounded-xl bg-gray-100 text-[#007AFF] font-semibold text-[17px] active:bg-gray-200 transition-colors flex items-center justify-center"
+            >
+              Skip
+            </button>
+            <button
+              onClick={handleContinue}
+              disabled={!selectedSource || isLoading}
+              data-onboarding-cta
+              className={`flex-[2] h-[50px] rounded-xl font-semibold text-[17px] shadow-sm active:scale-[0.98] transition-all flex items-center justify-center ${
+                selectedSource && !isLoading
+                  ? 'bg-[#007AFF] text-white'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {isLoading ? 'Saving...' : 'Continue'}
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,79 +1,98 @@
 import React from "react";
 import {
   Box,
-  Heading,
-  Text,
-  VStack,
   Button,
   Flex,
+  Heading,
   Icon,
   SimpleGrid,
+  Text,
+  VStack,
 } from "@chakra-ui/react";
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
-import { FaChartBar, FaPercent, FaRobot, FaLock, FaEye } from "react-icons/fa";
-import { MdVerifiedUser, MdSmartToy, MdPsychology, MdVisibility, MdLock, MdAnalytics } from "react-icons/md";
+import { FaEye, FaLock, FaPercent } from "react-icons/fa";
+import { MdAnalytics, MdPsychology, MdSmartToy, MdVerifiedUser } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 
-// Motion components for smooth animations
 const MotionBox = motion(Box);
 const MotionButton = motion(Button);
 
-// Apple-like easing curve
 const appleEase: [number, number, number, number] = [0.25, 0.46, 0.45, 0.94];
 
-// Design tokens matching HTML template exactly
 const tokens = {
-  // Typography colors
-  textMain: "#0f172a", // slate-900
-  textMuted: "#64748b", // slate-500
-  
-  // Brand colors
-  primary: "#2b8cee",
-  
-  // Background colors
-  backgroundLight: "#ffffff",
-  bgSlate50: "#f8fafc",
-  slate100: "#f1f5f9",
-  slate200: "#e2e8f0",
-  slate400: "#94a3b8",
+  title: "#1f2937",
+  body: "#4b5563",
+  primary: "#3a63b8",
+  gradientFrom: "#3a63b8",
+  gradientTo: "#06b6d4",
+  cardBorder: "#f3f4f6",
 };
 
-// SF Pro font family
 const fontFamily = 'Manrope, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
 
-// Feature Cards matching exact HTML template
 const featureCards = [
   {
     title: "Data Driven",
     body: "Real-time market analytics.",
     icon: MdAnalytics,
+    iconBg: "#dbeafe",
+    iconColor: "#3b82f6",
+    bodyMaxW: "113px",
   },
   {
     title: "Low Fees",
     body: "Maximize your total returns.",
     icon: FaPercent,
+    iconBg: "#d1fae5",
+    iconColor: "#059669",
+    bodyMaxW: "129px",
   },
   {
     title: "Expert Vetted",
     body: "Curated top opportunities.",
     icon: MdVerifiedUser,
+    iconBg: "#ffedd5",
+    iconColor: "#ea580c",
+    bodyMaxW: "92px",
   },
   {
     title: "Automated",
     body: "Hands-free smart investing.",
     icon: MdSmartToy,
+    iconBg: "#ede9fe",
+    iconColor: "#7c3aed",
+    bodyMaxW: "117px",
   },
 ];
 
-// Trust chips
 const trustChips = [
-  { label: "AI-First", icon: MdPsychology },
-  { label: "Secure", icon: MdLock },
-  { label: "Transparent", icon: MdVisibility },
+  {
+    label: "AI-First",
+    icon: MdPsychology,
+    bg: "#f3e8ff",
+    border: "#f3e8ff",
+    iconColor: "#7c3aed",
+    width: "160px",
+  },
+  {
+    label: "Secure",
+    icon: FaLock,
+    bg: "#dcfce7",
+    border: "#dcfce7",
+    iconColor: "#16a34a",
+    width: "160px",
+  },
+  {
+    label: "Transparent",
+    icon: FaEye,
+    bg: "#dbeafe",
+    border: "#dbeafe",
+    iconColor: "#2563eb",
+    width: "200px",
+  },
 ];
 
-// Animation variants
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -97,66 +116,54 @@ const itemVariants = {
   },
 };
 
-// Feature Card Component - Exact HTML template match
 const FeatureCard = ({ item }: { item: typeof featureCards[0] }) => {
   return (
     <MotionBox
       variants={itemVariants}
       display="flex"
       flexDirection="column"
-      gap={2}
-      p={4}
-      borderRadius="xl"
+      alignItems="center"
+      justifyContent="space-between"
+      h="168px"
+      p="17px"
+      borderRadius="24px"
       bg="white"
       border="1px solid"
-      borderColor={tokens.slate200}
-      boxShadow="0 2px 8px -2px rgba(0, 0, 0, 0.05)"
-      cursor="pointer"
-      role="group"
-      sx={{ transition: "all 0.2s ease" }}
-      _hover={{
-        borderColor: "rgba(43, 140, 238, 0.3)",
-      }}
+      borderColor={tokens.cardBorder}
+      boxShadow="0px 2px 5px -1px rgba(0,0,0,0.05), 0px 1px 3px -1px rgba(0,0,0,0.03)"
     >
-      {/* Icon Container */}
       <Flex
-        w="40px"
-        h="40px"
-        borderRadius="lg"
+        w="48px"
+        h="48px"
+        borderRadius="16px"
         align="center"
         justify="center"
-        bg="rgba(43, 140, 238, 0.1)"
-        mb={1}
+        bg={item.iconBg}
       >
-        <Icon 
-          as={item.icon} 
-          boxSize="20px" 
-          color={tokens.primary}
-        />
+        <Icon as={item.icon} boxSize="18px" color={item.iconColor} />
       </Flex>
 
-      {/* Content */}
-      <Box>
+      <VStack spacing={2} textAlign="center">
         <Text
           fontSize="15px"
           fontWeight="700"
-          color={tokens.textMain}
-          lineHeight="tight"
-          mb={1}
+          color={tokens.title}
+          lineHeight="22.5px"
           fontFamily={fontFamily}
         >
           {item.title}
         </Text>
         <Text
           fontSize="12px"
-          fontWeight="500"
-          color={tokens.textMuted}
-          lineHeight="normal"
+          fontWeight="400"
+          color={tokens.body}
+          lineHeight="19.25px"
+          maxW={item.bodyMaxW}
           fontFamily={fontFamily}
         >
           {item.body}
         </Text>
-      </Box>
+      </VStack>
     </MotionBox>
   );
 };
@@ -169,199 +176,175 @@ const WhyChooseSection = () => {
   return (
     <Box
       ref={sectionRef}
-      bg={tokens.bgSlate50}
+      bg="white"
       display="flex"
       justifyContent="center"
-      minH="100vh"
+      w="100%"
+      px={{ base: 6, md: 8 }}
+      pt="48px"
+      pb="32px"
       fontFamily={fontFamily}
     >
-      {/* Mobile Container */}
-      <Box
-        position="relative"
+      <MotionBox
+        initial="hidden"
+        animate={isInView ? "visible" : "hidden"}
+        variants={containerVariants}
         display="flex"
-        minH="100vh"
         w="100%"
-        maxW="500px"
+        maxW="448px"
         flexDirection="column"
-        bg={tokens.backgroundLight}
-        overflow="hidden"
-        boxShadow="sm"
+        alignItems="center"
       >
-        {/* Main Content Area */}
-        <Box
-          as="main"
-          flex="1"
-          display="flex"
-          flexDirection="column"
-          px={5}
-          py={6}
-        >
-          <MotionBox
-            initial="hidden"
-            animate={isInView ? "visible" : "hidden"}
-            variants={containerVariants}
-            display="flex"
-            flexDirection="column"
-            flex="1"
+        <MotionBox variants={itemVariants} display="flex" justifyContent="center" mb={6}>
+          <Flex
+            align="center"
+            justify="center"
+            px="20px"
+            py="8px"
+            borderRadius="9999px"
+            bg={tokens.primary}
+            boxShadow="0px 1px 2px 0px rgba(0,0,0,0.05)"
           >
-            {/* Section Tag */}
-            <MotionBox 
-              variants={itemVariants} 
-              display="flex" 
-              justifyContent="center" 
-              mb={3}
+            <Text
+              fontSize="12px"
+              fontWeight="700"
+              letterSpacing="0.6px"
+              textTransform="uppercase"
+              color="white"
+              lineHeight="16px"
+              fontFamily={fontFamily}
             >
-              <Flex
-                display="inline-flex"
-                align="center"
-                justify="center"
-                px={4}
-                py={1.5}
-                borderRadius="full"
-                bg={tokens.slate100}
-                border="1px solid"
-                borderColor={tokens.slate200}
-              >
-                <Text
-                  fontSize="11px"
-                  fontWeight="700"
-                  letterSpacing="0.1em"
-                  textTransform="uppercase"
-                  color={tokens.primary}
-                >
-                  Why Hushh
-                </Text>
-              </Flex>
-            </MotionBox>
+              Why Hushh
+            </Text>
+          </Flex>
+        </MotionBox>
 
-            {/* Headline */}
-            <MotionBox variants={itemVariants} textAlign="center" mb={8}>
-              <Heading
-                as="h1"
-                fontSize="32px"
-                fontWeight="800"
-                lineHeight="1.1"
-                letterSpacing="tight"
-                color={tokens.textMain}
-                mb={2}
-                fontFamily={fontFamily}
-              >
-                The Hushh<br />Advantage
-              </Heading>
-              <Text
-                fontSize="14px"
-                fontWeight="500"
-                color={tokens.textMuted}
-                lineHeight="relaxed"
-                maxW="280px"
-                mx="auto"
-              >
-                Built for the modern investor who values clarity over complexity.
-              </Text>
-            </MotionBox>
+        <MotionBox variants={itemVariants} textAlign="center" mb={8}>
+          <Heading
+            as="h2"
+            fontSize={{ base: "40px", md: "44px" }}
+            fontWeight="700"
+            lineHeight={{ base: "50px", md: "54px" }}
+            letterSpacing="-1px"
+            color={tokens.title}
+            mb={4}
+            fontFamily={fontFamily}
+          >
+            The Hushh
+            <br />
+            <Box
+              as="span"
+              bgGradient={`linear(to-r, ${tokens.gradientFrom}, ${tokens.gradientTo})`}
+              bgClip="text"
+              color="transparent"
+            >
+              Advantage
+            </Box>
+          </Heading>
+          <Text
+            fontSize="18px"
+            fontWeight="400"
+            color={tokens.body}
+            lineHeight="29.25px"
+            maxW="283px"
+            mx="auto"
+            fontFamily={fontFamily}
+          >
+            Built for the modern investor who values clarity over complexity.
+          </Text>
+        </MotionBox>
 
-            {/* Feature Grid (Compact 2x2) */}
-            <MotionBox variants={itemVariants} mb={8}>
-              <SimpleGrid columns={2} spacing={3}>
-                {featureCards.map((item) => (
-                  <FeatureCard key={item.title} item={item} />
-                ))}
-              </SimpleGrid>
-            </MotionBox>
+        <MotionBox variants={itemVariants} w="100%" mb={8}>
+          <SimpleGrid columns={2} spacing={3}>
+            {featureCards.map((item) => (
+              <FeatureCard key={item.title} item={item} />
+            ))}
+          </SimpleGrid>
+        </MotionBox>
 
-            {/* Chips Cluster (Pyramid Layout) */}
-            <MotionBox variants={itemVariants} mb={10}>
-              <VStack spacing={3} align="center">
-                {/* Top Row: 2 Chips */}
-                <Flex gap={3}>
-                  {trustChips.slice(0, 2).map((chip) => (
-                    <Flex
-                      key={chip.label}
-                      h="36px"
-                      align="center"
-                      justify="center"
-                      gap={2}
-                      borderRadius="lg"
-                      bg={tokens.bgSlate50}
-                      border="1px solid"
-                      borderColor={tokens.slate100}
-                      px={4}
-                    >
-                      <Icon as={chip.icon} boxSize="18px" color={tokens.slate400} />
-                      <Text
-                        fontSize="14px"
-                        fontWeight="600"
-                        color="#334155" /* slate-700 */
-                        fontFamily={fontFamily}
-                      >
-                        {chip.label}
-                      </Text>
-                    </Flex>
-                  ))}
-                </Flex>
-                {/* Bottom Row: 1 Centered Chip */}
+        <MotionBox variants={itemVariants} w="100%" mb={8}>
+          <VStack spacing={3} w="100%" align="center">
+            <Flex w="100%" justify="center" gap={3}>
+              {trustChips.slice(0, 2).map((chip) => (
                 <Flex
-                  h="36px"
+                  key={chip.label}
+                  w={chip.width}
+                  maxW={chip.width}
                   align="center"
                   justify="center"
                   gap={2}
-                  borderRadius="lg"
-                  bg={tokens.bgSlate50}
+                  px="17px"
+                  py="13px"
+                  borderRadius="16px"
+                  bg={chip.bg}
                   border="1px solid"
-                  borderColor={tokens.slate100}
-                  px={4}
+                  borderColor={chip.border}
+                  boxShadow="0px 1px 2px 0px rgba(0,0,0,0.05)"
                 >
-                  <Icon as={trustChips[2].icon} boxSize="18px" color={tokens.slate400} />
+                  <Icon as={chip.icon} boxSize="12px" color={chip.iconColor} />
                   <Text
                     fontSize="14px"
                     fontWeight="600"
-                    color="#334155" /* slate-700 */
+                    color={tokens.title}
+                    lineHeight="20px"
                     fontFamily={fontFamily}
                   >
-                    {trustChips[2].label}
+                    {chip.label}
                   </Text>
                 </Flex>
-              </VStack>
-            </MotionBox>
+              ))}
+            </Flex>
 
-            {/* Primary CTA - mt-auto to push to bottom */}
-            <Box mt="auto" pb={4}>
-              <MotionButton
-                onClick={() => navigate("/discover-fund-a")}
-                position="relative"
-                display="flex"
-                w="100%"
-                h="52px"
-                alignItems="center"
-                justifyContent="center"
-                borderRadius="xl"
-                bg={tokens.primary}
-                color="white"
-                fontSize="17px"
-                fontWeight="700"
-                letterSpacing="wide"
+            <Flex
+              w={trustChips[2].width}
+              maxW={trustChips[2].width}
+              align="center"
+              justify="center"
+              gap={2}
+              px="25px"
+              py="13px"
+              borderRadius="16px"
+              bg={trustChips[2].bg}
+              border="1px solid"
+              borderColor={trustChips[2].border}
+              boxShadow="0px 1px 2px 0px rgba(0,0,0,0.05)"
+            >
+              <Icon as={trustChips[2].icon} boxSize="12px" color={trustChips[2].iconColor} />
+              <Text
+                fontSize="14px"
+                fontWeight="600"
+                color={tokens.title}
+                lineHeight="20px"
                 fontFamily={fontFamily}
-                overflow="hidden"
-                _hover={{
-                  bg: "#2563eb",
-                }}
-                _active={{
-                  transform: "scale(0.98)",
-                }}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
               >
-                <Text position="relative" zIndex={10}>
-                  Explore Our Approach
-                </Text>
-              </MotionButton>
-            </Box>
-          </MotionBox>
-        </Box>
+                {trustChips[2].label}
+              </Text>
+            </Flex>
+          </VStack>
+        </MotionBox>
 
-        {/* Bottom Spacing for safe area */}
-        <Box h={4} w="100%" bg="transparent" />
-      </Box>
+        <MotionButton
+          variants={itemVariants}
+          onClick={() => navigate("/discover-fund-a")}
+          display="flex"
+          w="100%"
+          h="52px"
+          borderRadius="24px"
+          bg={tokens.primary}
+          color="white"
+          fontSize="18px"
+          fontWeight="600"
+          lineHeight="28px"
+          fontFamily={fontFamily}
+          boxShadow="0px 10px 15px -3px rgba(0,0,0,0.1), 0px 4px 6px -4px rgba(0,0,0,0.1)"
+          _hover={{ bg: "#355aa8" }}
+          _active={{ transform: "scale(0.98)" }}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          Explore our Approach
+        </MotionButton>
+      </MotionBox>
     </Box>
   );
 };

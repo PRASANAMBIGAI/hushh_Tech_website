@@ -4,42 +4,12 @@ import config from '../../resources/config/config';
 import { upsertOnboardingData } from '../../services/onboarding/upsertOnboardingData';
 import { useFooterVisibility } from '../../utils/useFooterVisibility';
 
-// Back arrow icon
-const BackIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-);
-
-// Minus icon
-const MinusIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 12H19" />
-  </svg>
-);
-
-// Plus icon
-const PlusIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 5V19M5 12H19" />
-  </svg>
-);
-
-const ChevronDownIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="6,9 12,15 18,9" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20,6 9,17 4,12" />
-  </svg>
-);
+/* ═══════════════════════════════════════════════
+   TYPES & CONSTANTS
+   ═══════════════════════════════════════════════ */
 
 type RecurringFrequency = 'once_a_month' | 'twice_a_month' | 'weekly' | 'every_other_week';
 
-// Share class configurations matching HTML template
 interface ShareClass {
   id: string;
   name: string;
@@ -47,8 +17,9 @@ interface ShareClass {
   unitPrice: number;
   displayPrice: string;
   description: string;
-  stripeGradient: string;
-  hoverBorder: string;
+  tierLabel?: string;
+  tierBg?: string;
+  tierText?: string;
 }
 
 const SHARE_CLASSES: ShareClass[] = [
@@ -57,42 +28,39 @@ const SHARE_CLASSES: ShareClass[] = [
     name: 'Class A',
     tier: 'ultra',
     unitPrice: 25000000,
-    displayPrice: '$25M/unit',
-    description: 'Ultra High Net Worth tier with maximum allocation priority and exclusive benefits.',
-    stripeGradient: 'from-slate-300 to-slate-500',
-    hoverBorder: 'hover:border-slate-300',
+    displayPrice: '$25M',
+    description: 'Maximum allocation priority with exclusive institutional benefits.',
+    tierLabel: 'Ultra',
+    tierBg: 'bg-indigo-100 dark:bg-indigo-900',
+    tierText: 'text-indigo-600 dark:text-indigo-300',
   },
   {
     id: 'class_b',
     name: 'Class B',
     tier: 'premium',
     unitPrice: 5000000,
-    displayPrice: '$5M/unit',
-    description: 'Premium tier with enhanced portfolio access and dedicated relationship management.',
-    stripeGradient: 'from-amber-300 to-amber-500',
-    hoverBorder: 'hover:border-amber-200',
+    displayPrice: '$5M',
+    description: 'Enhanced portfolio access and relationship management.',
+    tierLabel: 'Premium',
+    tierBg: 'bg-yellow-100 dark:bg-yellow-900/40',
+    tierText: 'text-yellow-700 dark:text-yellow-400',
   },
   {
     id: 'class_c',
     name: 'Class C',
     tier: 'standard',
     unitPrice: 1000000,
-    displayPrice: '$1M/unit',
-    description: 'Standard tier with full access to AI-powered multi-strategy alpha portfolio.',
-    stripeGradient: 'bg-[#2b8cee]',
-    hoverBorder: 'hover:border-[#2b8cee]/30',
+    displayPrice: '$1M',
+    description: 'Standard tier with full access to AI-powered multi-strategy alpha.',
   },
 ];
 
-// Format currency for display
+const TOTAL_STEPS = 12;
+
 const formatCurrency = (amount: number): string => {
   if (amount === 0) return '$0';
-  if (amount >= 1000000000) {
-    return `$${(amount / 1000000000).toFixed(1)}B`;
-  }
-  if (amount >= 1000000) {
-    return `$${(amount / 1000000).toFixed(0)}M`;
-  }
+  if (amount >= 1000000000) return `$${(amount / 1000000000).toFixed(1)}B`;
+  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(0)}M`;
   return `$${amount.toLocaleString()}`;
 };
 
@@ -108,60 +76,65 @@ const parseFormattedNumber = (value: string): number => {
   return parseInt(value.replace(/[^\d]/g, ''), 10) || 0;
 };
 
+/* ═══════════════════════════════════════════════
+   COMPONENT
+   ═══════════════════════════════════════════════ */
+
 export default function OnboardingStep1() {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isFooterVisible = useFooterVisibility();
+
   const [units, setUnits] = useState<Record<string, number>>({
     class_a: 0,
     class_b: 0,
     class_c: 0,
   });
+
   const [frequency, setFrequency] = useState<RecurringFrequency>('once_a_month');
-  const [investmentDay, setInvestmentDay] = useState('1st');
+  const [investmentDay, setInvestmentDay] = useState('1st of the month');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [customAmountError, setCustomAmountError] = useState<string | null>(null);
 
-  // Calculate total investment
-  const totalInvestment = SHARE_CLASSES.reduce((total, shareClass) => {
-    return total + (units[shareClass.id] * shareClass.unitPrice);
-  }, 0);
+  const totalInvestment = SHARE_CLASSES.reduce((total, sc) => total + units[sc.id] * sc.unitPrice, 0);
+  const hasSelection = Object.values(units).some((c) => c > 0);
 
-  // Check if at least one unit is selected
-  const hasSelection = Object.values(units).some(count => count > 0);
-
+  /* ─── Scroll & body class ─── */
   useEffect(() => {
-    // Scroll to top on component mount
     window.scrollTo(0, 0);
+    document.documentElement.classList.add('onboarding-page-scroll');
+    document.body.classList.add('onboarding-page-scroll');
+    return () => {
+      document.documentElement.classList.remove('onboarding-page-scroll');
+      document.body.classList.remove('onboarding-page-scroll');
+    };
   }, []);
 
+  /* ─── Load user + existing data ─── */
   useEffect(() => {
     const getCurrentUser = async () => {
       if (!config.supabaseClient) return;
 
       const { data: { user } } = await config.supabaseClient.auth.getUser();
-      if (!user) {
-        navigate('/login');
-        return;
-      }
+      if (!user) { navigate('/login'); return; }
       setUserId(user.id);
 
-      // Check if user intentionally skipped financial verification
       const hasSkipped = sessionStorage.getItem('financial_link_skipped') === 'true';
+      const hasCompleted = sessionStorage.getItem('financial_verification_complete') === 'true';
 
-      if (hasSkipped) {
-        // Keep the flag during onboarding to avoid local dev StrictMode double-effect redirect loops.
-        console.log('[Step1] User skipped financial verification - allowing access');
+      if (hasSkipped || hasCompleted) {
+        console.log('[Step1] Financial verification bypassed via sessionStorage flag');
       } else {
-        // Gate: redirect to financial-link if not yet verified
-        const { data: financialData } = await config.supabaseClient
+        const { data: financialData, error: finError } = await config.supabaseClient
           .from('user_financial_data')
           .select('status')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
+
+        if (finError) console.warn('[Step1] Financial data query error:', finError.message);
 
         if (!financialData || (financialData.status !== 'complete' && financialData.status !== 'partial')) {
           navigate('/onboarding/financial-link', { replace: true });
@@ -169,12 +142,11 @@ export default function OnboardingStep1() {
         }
       }
 
-      // Load existing selections if any
       const { data: onboardingData } = await config.supabaseClient
         .from('onboarding_data')
         .select('class_a_units, class_b_units, class_c_units, recurring_frequency, recurring_day_of_month, recurring_amount')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (onboardingData) {
         setUnits({
@@ -185,111 +157,68 @@ export default function OnboardingStep1() {
 
         if (onboardingData.recurring_frequency) {
           const freqMap: Record<string, RecurringFrequency> = {
-            // Current DB values (match onboarding_data_recurring_frequency_check)
-            once_a_month: 'once_a_month',
-            twice_a_month: 'twice_a_month',
-            weekly: 'weekly',
-            every_other_week: 'every_other_week',
-
-            // Legacy values (older constraint/data)
-            monthly: 'once_a_month',
-            bimonthly: 'twice_a_month',
-            biweekly: 'every_other_week',
+            once_a_month: 'once_a_month', twice_a_month: 'twice_a_month',
+            weekly: 'weekly', every_other_week: 'every_other_week',
+            monthly: 'once_a_month', bimonthly: 'twice_a_month', biweekly: 'every_other_week',
           };
-
-          const raw = String(onboardingData.recurring_frequency);
-          setFrequency(freqMap[raw] || 'once_a_month');
+          setFrequency(freqMap[String(onboardingData.recurring_frequency)] || 'once_a_month');
         }
 
         if (onboardingData.recurring_day_of_month) {
-          const dayNum = onboardingData.recurring_day_of_month;
-          if (dayNum === 31) {
-            setInvestmentDay('Last');
-          } else {
-            const suffix = dayNum === 1 ? 'st' : dayNum === 2 ? 'nd' : dayNum === 3 ? 'rd' : 'th';
-            setInvestmentDay(`${dayNum}${suffix}`);
-          }
+          const d = onboardingData.recurring_day_of_month;
+          setInvestmentDay(d === 31 ? 'Last day of the month' : d === 15 ? '15th of the month' : '1st of the month');
         }
 
         if (onboardingData.recurring_amount) {
-          const amount = onboardingData.recurring_amount;
-          if ([500000, 750000, 1000000, 1500000].includes(amount)) {
-            setSelectedAmount(amount);
-            setCustomAmount('');
+          const amt = onboardingData.recurring_amount;
+          if ([500000, 750000, 1000000, 1500000].includes(amt)) {
+            setSelectedAmount(amt); setCustomAmount('');
           } else {
-            setSelectedAmount(null);
-            setCustomAmount(amount.toLocaleString());
+            setSelectedAmount(null); setCustomAmount(amt.toLocaleString());
           }
         }
       }
     };
-
     getCurrentUser();
   }, [navigate]);
 
+  /* ─── Handlers ─── */
   const handleUnitChange = (classId: string, delta: number) => {
-    setUnits(prev => ({
-      ...prev,
-      [classId]: Math.max(0, prev[classId] + delta),
-    }));
+    setUnits((prev) => ({ ...prev, [classId]: Math.max(0, prev[classId] + delta) }));
   };
 
   const handleAmountClick = (amount: number) => {
-    setSelectedAmount(amount);
-    setCustomAmount('');
-    setCustomAmountError(null);
-    setError(null);
+    setSelectedAmount(amount); setCustomAmount(''); setCustomAmountError(null); setError(null);
   };
 
-  const validateRecurringAmount = (rawValue: number): string | null => {
-    if (rawValue === 0) return null;
-    if (rawValue < MIN_RECURRING_AMOUNT) {
-      return `Minimum recurring amount is $${MIN_RECURRING_AMOUNT.toLocaleString()}`;
-    }
-    if (rawValue > MAX_RECURRING_AMOUNT) {
-      return `Maximum recurring amount is $${(MAX_RECURRING_AMOUNT / 1000000).toFixed(0)}M`;
-    }
+  const validateRecurringAmount = (v: number): string | null => {
+    if (v === 0) return null;
+    if (v < MIN_RECURRING_AMOUNT) return `Minimum is $${MIN_RECURRING_AMOUNT.toLocaleString()}`;
+    if (v > MAX_RECURRING_AMOUNT) return `Maximum is $${(MAX_RECURRING_AMOUNT / 1000000).toFixed(0)}M`;
     return null;
   };
 
   const handleCustomAmountChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setSelectedAmount(null);
-    setError(null);
-
-    const rawValue = e.target.value.replace(/[^\d]/g, '');
-    if (rawValue.length > 12) return;
-
-    const formattedValue = formatNumberWithCommas(rawValue);
-    setCustomAmount(formattedValue);
-    setCustomAmountError(validateRecurringAmount(parseFormattedNumber(formattedValue)));
+    setSelectedAmount(null); setError(null);
+    const raw = e.target.value.replace(/[^\d]/g, '');
+    if (raw.length > 12) return;
+    const formatted = formatNumberWithCommas(raw);
+    setCustomAmount(formatted);
+    setCustomAmountError(validateRecurringAmount(parseFormattedNumber(formatted)));
   };
 
-  const getFinalRecurringAmount = () => {
-    if (selectedAmount) return selectedAmount;
-    return parseFormattedNumber(customAmount);
-  };
+  const getFinalRecurringAmount = () => selectedAmount || parseFormattedNumber(customAmount);
 
   const handleNext = async () => {
     if (!userId || !config.supabaseClient || !hasSelection) return;
-    if (customAmountError) {
-      setError(customAmountError);
-      return;
-    }
+    if (customAmountError) { setError(customAmountError); return; }
 
-    setIsLoading(true);
-    setError(null);
+    setIsLoading(true); setError(null);
     try {
       const recurringAmount = getFinalRecurringAmount();
-      const convertDayToInt = (day: string | number): number => {
-        if (typeof day === 'number') return day;
-        if (day === 'Last') return 31;
-        return parseInt(day.replace(/\D/g, ''), 10);
-      };
-
-      const convertFrequencyToDb = (freq: RecurringFrequency): string => {
-        // DB constraint expects these exact values.
-        return freq;
-      };
+      let dayInt = 1;
+      if (investmentDay.includes('15th')) dayInt = 15;
+      else if (investmentDay.includes('Last')) dayInt = 31;
 
       const updateData: Record<string, unknown> = {
         selected_fund: 'hushh_fund_a',
@@ -302,8 +231,8 @@ export default function OnboardingStep1() {
       };
 
       if (recurringAmount > 0) {
-        updateData.recurring_frequency = convertFrequencyToDb(frequency);
-        updateData.recurring_day_of_month = convertDayToInt(investmentDay);
+        updateData.recurring_frequency = frequency;
+        updateData.recurring_day_of_month = dayInt;
         updateData.recurring_amount = recurringAmount;
       } else {
         updateData.recurring_frequency = null;
@@ -311,337 +240,291 @@ export default function OnboardingStep1() {
         updateData.recurring_amount = null;
       }
 
-      // Save share unit selections to database (upsert: creates row if missing)
       const { error: saveError } = await upsertOnboardingData(userId, updateData);
+      if (saveError) { setError(saveError.message || 'Failed to save'); return; }
 
-      if (saveError) {
-        setError(saveError.message || 'Failed to save investment details');
-        return;
-      }
-
-      // Step 1 is persisted; skip marker is no longer needed.
       sessionStorage.removeItem('financial_link_skipped');
-
-      // Navigate to step 2
+      sessionStorage.removeItem('financial_verification_complete');
       navigate('/onboarding/step-2');
-    } catch (error) {
-      console.error('Error:', error);
+    } catch (err) {
+      console.error('Error:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleBack = () => {
-    navigate('/onboarding/financial-link');
-  };
+  const handleBack = () => navigate('/onboarding/financial-link');
 
-  // Render share class card
-  const renderShareClassCard = (shareClass: ShareClass) => {
-    const unitCount = units[shareClass.id];
-    const isUltra = shareClass.tier === 'ultra';
-    const isPremium = shareClass.tier === 'premium';
+  /* ─── Frequency buttons config ─── */
+  const freqOptions: { value: RecurringFrequency; label: string }[] = [
+    { value: 'once_a_month', label: 'Once a month' },
+    { value: 'twice_a_month', label: 'Twice a month' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'every_other_week', label: 'Bi-weekly' },
+  ];
 
-    return (
-      <div
-        key={shareClass.id}
-        className={`group relative rounded-xl border border-slate-200 bg-white p-5 transition-all ${shareClass.hoverBorder} hover:shadow-md`}
-      >
-        {/* Left colored vertical stripe */}
-        <div 
-          className={`absolute left-0 top-4 h-8 w-1 rounded-r-full ${
-            shareClass.tier === 'standard' 
-              ? 'bg-[#2b8cee]' 
-              : `bg-gradient-to-b ${shareClass.stripeGradient}`
-          }`}
-        />
-        
-        <div className="flex flex-col gap-4">
-          {/* Top row: Class name, badge, price */}
-          <div className="flex items-start justify-between">
-            <div className="max-w-[65%]">
-              <h3 className="text-slate-900 text-lg font-bold">{shareClass.name}</h3>
-              
-              {/* Tier badge */}
-              {isUltra && (
-                <div className="inline-flex mt-1 items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 uppercase tracking-wide">
-                  ULTRA
-                </div>
-              )}
-              {isPremium && (
-                <div className="inline-flex mt-1 items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 uppercase tracking-wide">
-                  PREMIUM
-                </div>
-              )}
-              
-              <p className="text-slate-500 text-xs font-medium mt-2 leading-relaxed">
-                {shareClass.description}
-              </p>
-            </div>
-            
-            <div className="text-right shrink-0">
-              <p className="text-slate-900 text-lg font-bold">{shareClass.displayPrice}</p>
-            </div>
-          </div>
+  const amountPresets = [500000, 750000, 1000000, 1500000];
 
-          {/* Bottom row: Units selector */}
-          <div className="flex items-center justify-between pt-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Units</span>
-            
-            <div className="flex items-center gap-3 bg-slate-50 rounded-full p-1 border border-slate-100">
-              {/* Minus button */}
-              <button
-                onClick={() => handleUnitChange(shareClass.id, -1)}
-                disabled={unitCount === 0}
-                className="flex size-10 items-center justify-center rounded-full bg-white border border-slate-200 text-slate-300 transition-colors disabled:opacity-50"
-              >
-                <MinusIcon />
-              </button>
-              
-              {/* Unit count */}
-              <span className="w-8 text-center text-slate-900 font-bold text-lg">
-                {unitCount}
-              </span>
-              
-              {/* Plus button */}
-              <button
-                onClick={() => handleUnitChange(shareClass.id, 1)}
-                className="flex size-10 items-center justify-center rounded-full bg-white border border-slate-200 text-slate-900 shadow-sm hover:border-slate-300 active:bg-slate-50 transition-colors"
-              >
-                <PlusIcon />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
+  /* ═══════════════════════════════════════════════
+     RENDER
+     ═══════════════════════════════════════════════ */
   return (
-    <div 
-      className="bg-slate-50 min-h-screen"
-      style={{ fontFamily: "'Manrope', sans-serif" }}
+    <div
+      className="bg-white min-h-[100dvh] pb-52"
+      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif", WebkitFontSmoothing: 'antialiased' }}
     >
-      <div className="onboarding-shell relative flex min-h-screen w-full flex-col bg-white max-w-[500px] mx-auto shadow-xl overflow-hidden border-x border-slate-100">
-        
-        {/* Sticky Header */}
-        <header className="flex items-center px-4 pt-4 pb-2 bg-white sticky top-0 z-10">
-          <button 
-            onClick={handleBack}
-            aria-label="Go back"
-            className="flex size-10 shrink-0 items-center justify-center text-slate-900 rounded-full hover:bg-slate-50 transition-colors"
-          >
-            <BackIcon />
-          </button>
-        </header>
+      {/* ═══ iOS Navigation Bar ═══ */}
+      <nav className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#C6C6C8]/30 flex items-end justify-between px-4 pb-2" style={{ paddingTop: 'calc(env(safe-area-inset-top, 12px) + 4px)', minHeight: '48px' }}>
+        <button onClick={handleBack} className="text-[#007AFF] flex items-center -ml-2 active:opacity-50 transition-opacity" aria-label="Go back">
+          <span className="material-symbols-outlined text-3xl -mr-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>chevron_left</span>
+          <span className="text-[17px] leading-none pb-[2px]">Back</span>
+        </button>
+        <span className="font-semibold text-[17px] text-black">Setup</span>
+        <button onClick={() => navigate('/dashboard')} className="text-[#007AFF] text-[17px] font-normal active:opacity-50 transition-opacity">
+          Skip
+        </button>
+      </nav>
 
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col px-4 sm:px-6 pb-56 sm:pb-72">
-          {/* Header Section */}
-          <div className="mb-8 mt-2 flex flex-col items-center text-center">
-            <h1 className="text-slate-900 text-[22px] font-extrabold leading-tight tracking-tight mb-2">
-              Hushh Fund A: AI-Powered Multi-Strategy Alpha
-            </h1>
-            <p className="text-slate-500 text-sm font-bold tracking-wide uppercase">
-              TAGLINE: The AI-Powered Berkshire Hathaway
+      <main className="px-4 pt-4 max-w-md mx-auto">
+        {/* ═══ Progress Bar ═══ */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[13px] font-medium text-[#8E8E93] uppercase tracking-wide">Onboarding Progress</span>
+            <span className="text-[13px] text-[#8E8E93]">Step 1/{TOTAL_STEPS}</span>
+          </div>
+          <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full bg-[#007AFF] rounded-full transition-all duration-500" style={{ width: `${Math.round((1 / TOTAL_STEPS) * 100)}%` }} />
+          </div>
+          <p className="mt-2 text-[13px] font-medium text-[#007AFF]">{Math.round((1 / TOTAL_STEPS) * 100)}% complete</p>
+        </div>
+
+        {/* ═══ Title Block ═══ */}
+        <div className="mb-6">
+          <h2 className="text-[13px] font-semibold text-[#3C3C4399] uppercase tracking-wider mb-1">
+            Institutional Series
+          </h2>
+          <h1 className="text-[34px] leading-tight font-bold tracking-tight text-black">
+            Hushh Fund A<br />
+            <span className="text-[#007AFF]">Multi-Strategy Alpha</span>
+          </h1>
+          <p className="mt-2 text-[17px] leading-snug text-[#3C3C4399]">
+            Select unit allocation for each share class. Our inaugural fund leverages AI-driven value investing.
+          </p>
+        </div>
+
+        {/* ═══ Error ═══ */}
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {/* ═══ Share Class Cards ═══ */}
+        <div className="space-y-4 mb-8">
+          {SHARE_CLASSES.map((sc) => {
+            const count = units[sc.id];
+            const isSelected = count > 0;
+
+            return (
+              <div
+                key={sc.id}
+                className={`bg-white rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
+                  isSelected ? 'ring-2 ring-[#007AFF]/40' : ''
+                }`}
+              >
+                {/* Top section */}
+                <div className="p-4 border-b border-[#C6C6C8]/20">
+                  <div className="flex justify-between items-start mb-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[17px] font-semibold text-black">{sc.name}</h3>
+                      {sc.tierLabel && (
+                        <span className={`${sc.tierBg} ${sc.tierText} text-[11px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide`}>
+                          {sc.tierLabel}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[17px] font-semibold text-black">{sc.displayPrice}</div>
+                      <div className="text-[11px] text-[#3C3C4399] uppercase">Per Unit</div>
+                    </div>
+                  </div>
+                  <p className="text-[15px] text-[#3C3C4399] leading-snug pr-8">
+                    {sc.description}
+                  </p>
+                </div>
+
+                {/* Units stepper */}
+                <div className="px-4 py-3 flex justify-between items-center">
+                  <span className="text-[15px] font-medium text-[#3C3C4399] uppercase tracking-wide">
+                    Units
+                  </span>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => handleUnitChange(sc.id, -1)}
+                      disabled={count === 0}
+                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 disabled:opacity-50 transition active:bg-gray-100"
+                      aria-label={`Decrease ${sc.name} units`}
+                    >
+                      <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>
+                        remove
+                      </span>
+                    </button>
+                    <span className="text-[20px] font-medium w-4 text-center text-black">
+                      {count}
+                    </span>
+                    <button
+                      onClick={() => handleUnitChange(sc.id, 1)}
+                      className="w-8 h-8 rounded-full border border-[#007AFF] text-[#007AFF] flex items-center justify-center transition active:bg-blue-50"
+                      aria-label={`Increase ${sc.name} units`}
+                    >
+                      <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>
+                        add
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ═══ Recurring Investment ═══ */}
+        <div className="mb-4">
+          <div className="text-center mb-4 px-4">
+            <h3 className="text-[20px] font-semibold text-black">Recurring Investment</h3>
+            <p className="text-[15px] text-[#3C3C4399] mt-1">
+              Configure automated contributions to streamline future capital calls.
             </p>
           </div>
 
-          {/* Info Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 mb-8 text-center shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-            <p className="text-slate-900 font-bold mb-2 text-base">
-              Select the number of units for each share class. You can invest in multiple classes.
-            </p>
-            <p className="text-slate-600 text-sm font-medium leading-relaxed">
-              Our inaugural fund demonstrating an AI-driven value investing strategy designed to deliver consistent, market-beating returns and sustainable, risk-adjusted alpha.
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {error}
+          <div className="bg-white rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+            {/* Frequency header */}
+            <div className="px-4 py-3 border-b border-[#C6C6C8]/20 flex justify-between items-center">
+              <span className="text-[13px] font-medium text-[#3C3C4399] uppercase tracking-wide">
+                Frequency
+              </span>
+              <span className="bg-gray-100 text-[#3C3C4399] text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">
+                Optional
+              </span>
             </div>
-          )}
 
-          {/* Share Class Cards */}
-          <div className="flex flex-col gap-6">
-            {SHARE_CLASSES.map(renderShareClassCard)}
-          </div>
-
-          {/* Recurring Investment */}
-          <div className="mt-8 mb-3">
-            <h2 className="text-lg font-bold text-slate-900">Recurring Investment</h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Optional. You can configure this now and avoid an extra step later.
-            </p>
-          </div>
-
-          {/* Frequency Section */}
-          <div className="mb-6">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-              <h3 className="text-base font-bold text-slate-900 mb-4">Frequency</h3>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                {[
-                  { value: 'once_a_month', label: 'Once a month' },
-                  { value: 'twice_a_month', label: 'Twice a month' },
-                  { value: 'weekly', label: 'Weekly' },
-                  { value: 'every_other_week', label: 'Every other week' },
-                ].map((option) => (
+            {/* Frequency buttons */}
+            <div className="p-4 border-b border-[#C6C6C8]/20">
+              <div className="grid grid-cols-2 gap-3">
+                {freqOptions.map((opt) => (
                   <button
-                    key={option.value}
-                    onClick={() => setFrequency(option.value as RecurringFrequency)}
-                    className={`flex h-11 items-center justify-center rounded-xl text-xs font-semibold transition-all ${
-                      frequency === option.value
-                        ? 'bg-[#2b8cee] text-white shadow-sm ring-2 ring-[#2b8cee] ring-offset-1'
-                        : 'bg-white border border-slate-200 text-slate-900 hover:bg-slate-50'
+                    key={opt.value}
+                    onClick={() => setFrequency(opt.value)}
+                    className={`py-2.5 px-2 text-[15px] font-medium rounded-lg border text-center transition ${
+                      frequency === opt.value
+                        ? 'bg-blue-50 text-[#007AFF] border-[#007AFF]/20'
+                        : 'bg-white text-black border-gray-200 hover:bg-gray-50'
                     }`}
                   >
-                    {option.label}
+                    {opt.label}
                   </button>
                 ))}
               </div>
+            </div>
 
+            {/* Investment Day */}
+            <div className="px-4 py-4 border-b border-[#C6C6C8]/20">
+              <label className="text-[13px] font-medium text-[#3C3C4399] uppercase tracking-wide mb-2 block">
+                Investment Day
+              </label>
               <div className="relative">
-                <label className="absolute -top-2 left-3 bg-white px-1 text-xs font-medium text-slate-500">
-                  Investment day
-                </label>
                 <select
                   value={investmentDay}
                   onChange={(e) => setInvestmentDay(e.target.value)}
-                  className="w-full h-11 rounded-xl border border-slate-300 bg-white text-slate-900 px-3 text-sm font-medium focus:border-[#2b8cee] focus:ring-1 focus:ring-[#2b8cee] outline-none appearance-none"
+                  className="w-full appearance-none bg-white border border-gray-200 rounded-lg py-2.5 px-3 pr-8 text-[17px] text-black focus:outline-none focus:ring-1 focus:ring-[#007AFF] focus:border-[#007AFF]"
                 >
-                  <option value="1st">1st</option>
-                  <option value="2nd">2nd</option>
-                  <option value="5th">5th</option>
-                  <option value="10th">10th</option>
-                  <option value="15th">15th</option>
-                  <option value="20th">20th</option>
-                  <option value="25th">25th</option>
-                  <option value="Last">Last day of month</option>
+                  <option>1st of the month</option>
+                  <option>15th of the month</option>
+                  <option>Last day of the month</option>
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-                  <ChevronDownIcon />
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[#3C3C4399]">
+                  <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}>
+                    expand_more
+                  </span>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Recurring Amount Section */}
-          <div className="mb-8">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-              <h3 className="text-base font-bold text-slate-900 mb-4">Recurring Amount</h3>
-
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                {[500000, 750000, 1000000, 1500000].map((amount) => (
+            {/* Recurring Amount */}
+            <div className="p-4">
+              <label className="text-[13px] font-medium text-[#3C3C4399] uppercase tracking-wide mb-3 block">
+                Recurring Amount
+              </label>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                {amountPresets.map((amt) => (
                   <button
-                    key={amount}
-                    onClick={() => handleAmountClick(amount)}
-                    className={`relative flex flex-col items-center justify-center py-3 rounded-xl transition-all ${
-                      selectedAmount === amount
-                        ? 'border-2 border-[#2b8cee] bg-[#2b8cee]/5'
-                        : 'border border-slate-200 bg-white hover:border-[#2b8cee]/50 hover:bg-slate-50'
+                    key={amt}
+                    onClick={() => handleAmountClick(amt)}
+                    className={`py-2.5 px-2 text-[15px] font-medium rounded-lg border text-center transition ${
+                      selectedAmount === amt
+                        ? 'bg-blue-50 text-[#007AFF] border-[#007AFF]/20'
+                        : 'bg-white text-black border-gray-200 hover:bg-gray-50'
                     }`}
                   >
-                    <span className={`text-sm font-bold ${
-                      selectedAmount === amount ? 'text-[#2b8cee]' : 'text-slate-900'
-                    }`}>
-                      ${amount.toLocaleString()}
-                    </span>
-                    {selectedAmount === amount && (
-                      <div className="absolute -top-2 -right-2 bg-[#2b8cee] text-white rounded-full p-0.5">
-                        <CheckIcon />
-                      </div>
-                    )}
+                    ${(amt / 1000).toLocaleString()}k
                   </button>
                 ))}
               </div>
-
-              <div className="space-y-2">
-                <div className="relative">
-                  <span className={`absolute inset-y-0 left-0 pl-3 flex items-center font-medium text-lg ${
-                    customAmountError ? 'text-red-400' : 'text-slate-400'
-                  }`}>
-                    $
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={customAmount}
-                    onChange={handleCustomAmountChange}
-                    placeholder="Other Amount"
-                    className={`w-full h-12 rounded-xl border bg-white text-slate-900 pl-8 pr-3 text-lg font-bold outline-none transition-all placeholder:text-slate-300 ${
-                      customAmountError
-                        ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
-                        : 'border-slate-300 focus:border-[#2b8cee] focus:ring-1 focus:ring-[#2b8cee]'
-                    }`}
-                  />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-[#3C3C4399] text-[17px]">$</span>
                 </div>
-
-                {customAmountError && (
-                  <p className="text-red-500 text-xs font-medium px-1">{customAmountError}</p>
-                )}
-                {!customAmountError && customAmount && (
-                  <p className="text-green-600 text-xs font-medium px-1">
-                    Amount: ${parseFormattedNumber(customAmount).toLocaleString()}
-                  </p>
-                )}
-                {!customAmount && selectedAmount === null && (
-                  <p className="text-slate-400 text-xs px-1">
-                    Leave empty if you want to set recurring later.
-                  </p>
-                )}
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={customAmount}
+                  onChange={handleCustomAmountChange}
+                  placeholder="Enter custom amount"
+                  className={`block w-full pl-7 pr-3 py-2.5 border rounded-lg bg-white text-black placeholder-gray-400 focus:outline-none focus:ring-1 text-[17px] ${
+                    customAmountError
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : 'border-gray-300 focus:ring-[#007AFF] focus:border-[#007AFF]'
+                  }`}
+                />
               </div>
+              {customAmountError && (
+                <p className="text-red-500 text-[12px] mt-1.5 px-1">{customAmountError}</p>
+              )}
             </div>
           </div>
-        </main>
+        </div>
+      </main>
 
-        {/* Fixed Footer - Hidden when main footer is visible */}
-        {!isFooterVisible && (
-          <div
-            className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-[500px] mx-auto border-t border-slate-100 bg-white/90 backdrop-blur-md px-4 sm:px-6 pt-4 sm:pt-5 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-[0_-4px_20px_rgba(0,0,0,0.04)]"
-            data-onboarding-footer
-          >
-            {/* Total Investment */}
-            <div className="flex items-center justify-between mb-4 sm:mb-6">
-              <span className="text-[11px] sm:text-xs font-bold text-slate-500 tracking-wider uppercase">
-                TOTAL INVESTMENT
+      {/* ═══ Fixed Footer ═══ */}
+      {!isFooterVisible && (
+        <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-[#C6C6C8]/30 z-40 pt-4 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
+          <div className="max-w-md mx-auto">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[13px] font-bold text-[#3C3C4399] uppercase tracking-wide">
+                Total Investment
               </span>
-              <span className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+              <span className="text-[22px] font-bold text-black">
                 {formatCurrency(totalInvestment)}
               </span>
             </div>
-
-            {/* Buttons */}
-            <div className="flex flex-col gap-3 sm:gap-4">
-              {/* Next Button */}
-              <button
-                onClick={handleNext}
-                disabled={!hasSelection || isLoading || !!customAmountError}
-                data-onboarding-cta
-                className={`flex w-full h-11 sm:h-12 cursor-pointer items-center justify-center rounded-full bg-[#2b8cee] px-6 text-white text-sm sm:text-base font-semibold transition-all hover:bg-[#2070c0] active:scale-[0.98] disabled:bg-slate-100 disabled:text-slate-400 ${
-                  !hasSelection || isLoading || !!customAmountError ? 'disabled:cursor-not-allowed' : ''
-                }`}
-              >
-                {isLoading ? 'Saving...' : 'Next'}
-              </button>
-
-              {/* Back Button */}
-              <button
-                onClick={handleBack}
-                className="flex w-full cursor-pointer items-center justify-center rounded-full bg-transparent py-2 text-slate-500 text-sm font-semibold hover:text-slate-800 transition-colors"
-              >
-                Back
-              </button>
-            </div>
-
-            {/* Footer Note */}
-            <div className="mt-3 sm:mt-4 text-center">
-              <p className="text-[10px] text-slate-400 leading-tight">
-                Minimum investment per unit &bull; Units can be adjusted later
-              </p>
-            </div>
+            <button
+              onClick={handleNext}
+              disabled={!hasSelection || isLoading || !!customAmountError}
+              data-onboarding-cta
+              className={`w-full font-semibold text-[17px] py-3.5 rounded-xl transition duration-200 shadow-md ${
+                !hasSelection || isLoading || !!customAmountError
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-[#007AFF] hover:bg-blue-600 text-white active:scale-[0.98]'
+              }`}
+            >
+              {isLoading ? 'Saving...' : 'Next'}
+            </button>
+            <p className="text-[11px] text-center text-[#3C3C4399] mt-3">
+              Minimum investment per unit • Units can be adjusted later
+            </p>
           </div>
-        )}
-      </div>
+        </footer>
+      )}
     </div>
   );
 }

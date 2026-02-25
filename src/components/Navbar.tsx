@@ -61,8 +61,15 @@ export default function Navbar() {
   const careerDropdownRef = useRef<HTMLDivElement>(null);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const [showScrollIndicator, setShowScrollIndicator] = useState(true);
+  const [hushhCoins, setHushhCoins] = useState<number | null>(null);
   const toast = useToast();
   const isMobile = useBreakpointValue({ base: true, lg: false });
+  const isDesktop = isMobile === false;
+
+  // Hide ticker strip on onboarding & profile pages to keep UX clean
+  const isOnboarding = location.pathname.startsWith('/onboarding');
+  const isProfilePage = location.pathname.startsWith('/hushh-user-profile');
+  const hideTicker = isOnboarding || isProfilePage;
 
   // Fetch real-time stock quotes (refreshes every 2 minutes for 27 stocks)
   const { quotes, loading: quotesLoading, lastUpdated } = useStockQuotes(120000);
@@ -156,7 +163,33 @@ export default function Navbar() {
     setToastShown(true);
   }, [session, toastShown, toast, t]);
 
+  // Fetch Hushh Coins balance when authenticated
+  useEffect(() => {
+    if (!session?.user?.id || !config.supabaseClient) { setHushhCoins(null); return; }
+    const fetchCoins = async () => {
+      try {
+        const { data } = await config.supabaseClient!
+          .from('ceo_meeting_payments')
+          .select('hushh_coins_awarded')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        setHushhCoins(data?.hushh_coins_awarded ?? 0);
+      } catch { setHushhCoins(0); }
+    };
+    fetchCoins();
+  }, [session?.user?.id]);
+
   const isAuthenticated = !!session;
+
+  const primaryNavLinks = [
+    { path: "/", label: t('nav.home') },
+    { path: "/about/leadership", label: t('nav.ourPhilosophy') },
+    { path: "/discover-fund-a", label: t('nav.fundA') },
+    { path: "/community", label: t('nav.community') },
+    { path: "/a2a-playground", label: t('nav.kycStudio') },
+    { path: "/contact", label: t('nav.contact') },
+    { path: "/faq", label: t('nav.faq') },
+  ];
 
   const toggleDrawer = () => setIsOpen((prev) => !prev);
   const handleLinkClick = (path: string) => {
@@ -218,7 +251,7 @@ export default function Navbar() {
       {/* Fixed Header with Navigation + Ticker - Light Theme */}
       <header className="fixed w-full z-[999] top-0">
         {/* Main Navigation Bar - Soft Light Background */}
-        <nav className="flex w-full items-center justify-between bg-[#F8F9FA] px-4 h-16 border-b border-gray-200 transition-colors duration-300">
+        <nav className="flex w-full items-center justify-between bg-[#F8F9FA] px-4 lg:px-8 h-16 border-b border-gray-200 transition-colors duration-300">
           {/* Left: Brand Lockup */}
           <Link to="/" className="flex items-center gap-3">
             {/* Hushh Logo Image in Circle with subtle gradient */}
@@ -236,23 +269,75 @@ export default function Navbar() {
             </div>
           </Link>
 
+          {/* Desktop Navigation */}
+          <div className="hidden lg:flex items-center gap-1">
+            {primaryNavLinks.map(({ path, label }) => {
+              const active = isActive(path);
+              return (
+                <button
+                  key={path}
+                  onClick={() => handleLinkClick(path)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                    active
+                      ? 'bg-[#2F80ED]/10 text-[#1f6cc7]'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Right: Utilities */}
           <div className="flex items-center gap-3">
             {/* Language Selector */}
             <LanguageSwitcher variant="light" />
-            
-            {/* Hamburger Menu - Blue Primary */}
-            <button
-              onClick={toggleDrawer}
-              className="flex items-center justify-center w-11 h-11 rounded-full bg-[#2F80ED] text-white active:scale-95 transition-transform shadow-lg shadow-blue-500/30 hover:bg-blue-600"
-              aria-label="Toggle menu"
-            >
-              <FiMenu className="w-5 h-5" />
-            </button>
+
+            {/* Desktop Utility Actions */}
+            {isDesktop && (
+              <>
+                {isAuthenticated ? (
+                  <>
+                    <button
+                      onClick={() => navigate('/hushh-user-profile')}
+                      className="hidden xl:inline-flex items-center justify-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      {t('nav.viewProfile')}
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="inline-flex items-center justify-center rounded-full bg-[#2F80ED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1f6cc7] transition-colors"
+                    >
+                      {t('nav.logout')}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => navigate('/Login')}
+                    className="inline-flex items-center justify-center rounded-full bg-[#2F80ED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1f6cc7] transition-colors"
+                  >
+                    {t('nav.login')}
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* Mobile Hamburger */}
+            {!isDesktop && (
+              <button
+                onClick={toggleDrawer}
+                className="flex items-center justify-center w-11 h-11 rounded-full bg-[#2F80ED] text-white active:scale-95 transition-transform shadow-lg shadow-blue-500/30 hover:bg-blue-600"
+                aria-label="Toggle menu"
+              >
+                <FiMenu className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </nav>
 
-        {/* Chip-based Ticker Strip - BELOW Navigation */}
+        {/* Chip-based Ticker Strip - BELOW Navigation (hidden on onboarding & profile pages) */}
+        {!hideTicker && (
         <section className="relative w-full bg-[#F8F9FA] py-2.5 border-b border-gray-200">
           {/* Ticker Marquee with Fade Mask */}
           <div className="ticker-mask relative flex w-full overflow-hidden">
@@ -286,192 +371,232 @@ export default function Navbar() {
             </div>
           )}
         </section>
+        )}
       </header>
 
-      {/* Spacer for fixed header (ticker ~48px + nav ~64px = 112px) */}
-      <div className="h-28" />
+      {/* Spacer for fixed header — shorter when ticker is hidden */}
+      <div className={hideTicker ? "h-16" : "h-28"} />
 
-      {/* Mobile Drawer Menu */}
+      {/* iOS Native Side Menu */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-[1000]"
-          style={{ background: "rgba(11, 17, 32, 0.30)" }}
+          className="fixed inset-0 z-[1000] transition-opacity duration-300"
+          style={{ background: "rgba(0, 0, 0, 0.25)" }}
           onClick={toggleDrawer}
         >
           <div
             ref={drawerRef}
-            className="fixed top-0 left-0 h-full bg-white"
-            style={{ width: "min(88vw, 360px)" }}
+            className="fixed inset-0 bg-[#F2F2F7] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-col h-full px-6 pt-5 pb-4">
-              <div className="flex items-center justify-between h-14">
+            <div className="flex flex-col min-h-full max-w-md mx-auto w-full px-4 pb-10">
+              {/* Header: Menu title + Close button */}
+              <div className="flex items-center justify-between pt-14 pb-4 px-0">
+                <h2 className="text-[34px] font-bold text-black tracking-tight leading-none">
+                  {t('nav.menu', 'Menu')}
+                </h2>
                 <button
                   onClick={toggleDrawer}
-                  className="w-11 h-11 flex items-center justify-center text-[#0B1120] focus:outline-none"
+                  className="w-[30px] h-[30px] flex items-center justify-center rounded-full bg-[#E3E3E8] text-[#8E8E93] active:bg-[#D1D1D6] transition-colors"
+                  aria-label="Close menu"
                 >
-                  <FiX size={22} />
+                  <FiX size={18} strokeWidth={3} />
                 </button>
               </div>
 
-              <div 
-                ref={scrollContainerRef}
-                onScroll={handleMenuScroll}
-                className="flex-1 overflow-y-auto relative"
-              >
-                <div className="space-y-3">
-                  {[
-                    { path: "/", label: t('nav.home') },
-                    { path: "/about/leadership", label: t('nav.ourPhilosophy') },
-                    { path: "/discover-fund-a", label: t('nav.fundA') },
-                    { path: "/community", label: t('nav.community') },
-                    { path: "/a2a-playground", label: t('nav.kycStudio') },
-                  ].map(({ path, label }) => {
-                    const active = isActive(path);
-                    return (
-                      <button
-                        key={path}
-                        onClick={() => handleLinkClick(path)}
-                        className="relative w-full text-left"
-                      >
-                        <div className="flex items-center h-14 text-[22px] leading-[1.2] text-[#0B1120] font-medium active:bg-[rgba(0,169,224,0.06)] transition-colors duration-150 px-0">
-                          {active && (
-                            <span className="absolute left-[-12px] h-[18px] w-[2px] bg-[#135bec] rounded-full top-1/2 -translate-y-1/2" />
-                          )}
-                          <span className={active ? "font-semibold text-[#135bec]" : ""}>{label}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                  <div className="my-4 h-px bg-[#E5E7EB]" />
-
-                  {[
-                    { path: "/contact", label: t('nav.contact') },
-                    { path: "/faq", label: t('nav.faq') },
-                  ].map(({ path, label }) => {
-                    const active = isActive(path);
-                    return (
-                      <button
-                        key={path}
-                        onClick={() => handleLinkClick(path)}
-                        className="relative w-full text-left"
-                      >
-                        <div className="flex items-center h-14 text-[22px] leading-[1.2] text-[#0B1120] font-medium active:bg-[rgba(0,169,224,0.06)] transition-colors duration-150 px-0">
-                          {active && (
-                            <span className="absolute left-[-12px] h-[18px] w-[2px] bg-[#135bec] rounded-full top-1/2 -translate-y-1/2" />
-                          )}
-                          <span className={active ? "font-semibold text-[#135bec]" : ""}>{label}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                  {/* Career Dropdown */}
-                  <div className="relative w-full text-left">
-                    <button
-                      onClick={() => setMobileCareerDropdownOpen(!mobileCareerDropdownOpen)}
-                      className="flex items-center h-14 text-[22px] leading-[1.2] text-[#0B1120] font-medium active:bg-[rgba(0,169,224,0.06)] transition-colors duration-150 w-full text-left"
-                    >
-                      <span className={(isActive("/career") || isActive("/benefits")) ? "font-semibold text-[#135bec]" : ""}>
-                        {t('nav.joinUs')}
-                      </span>
-                      <FiChevronDown
-                        className={`ml-2 text-[#6B7280] transition-transform duration-200 ${
-                          mobileCareerDropdownOpen ? "rotate-180" : ""
-                        }`}
-                        size={18}
-                      />
-                    </button>
+              {/* Section 1: Primary Navigation */}
+              <div className="bg-white rounded-[10px] overflow-hidden mb-5 shadow-sm">
+                {[
+                  { path: "/", label: t('nav.home'), icon: "home", bg: "#007AFF" },
+                  { path: "/about/leadership", label: t('nav.ourPhilosophy'), icon: "menu_book", bg: "#34C759" },
+                  { path: "/discover-fund-a", label: t('nav.fundA'), icon: "pie_chart", bg: "#5856D6" },
+                  { path: "/community", label: t('nav.community'), icon: "groups", bg: "#FF9500" },
+                  { path: "/a2a-playground", label: t('nav.kycStudio'), icon: "verified_user", bg: "#FF2D55" },
+                ].map(({ path, label, icon, bg }, idx, arr) => (
+                  <button
+                    key={path}
+                    onClick={() => handleLinkClick(path)}
+                    className="flex items-center w-full min-h-[44px] py-2.5 pr-4 pl-4 active:bg-[#E5E5EA] transition-colors relative"
+                  >
                     <div
-                      className={`pl-4 transition-all duration-200 overflow-hidden ${
-                        mobileCareerDropdownOpen ? "max-h-28 opacity-100" : "max-h-0 opacity-0"
-                      }`}
+                      className="w-[29px] h-[29px] rounded-[7px] flex items-center justify-center mr-3 shrink-0"
+                      style={{ backgroundColor: bg }}
                     >
-                      <div className="border-t border-[#E5E7EB] pt-3 space-y-2">
-                        {[
-                          { path: "/career", label: t('nav.careers') },
-                          { path: "/benefits", label: t('nav.benefits') },
-                        ].map(({ path, label }) => {
-                          const active = isActive(path);
-                          return (
-                            <button
-                              key={path}
-                              onClick={() => handleLinkClick(path)}
-                              className="w-full text-left"
-                            >
-                              <div className="flex items-center h-12 text-[18px] text-[#475569] font-medium active:bg-[rgba(0,169,224,0.06)] rounded-md px-1">
-                                <span className={active ? "font-semibold text-[#135bec]" : ""}>{label}</span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <span className="material-symbols-outlined text-white text-[18px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>{icon}</span>
                     </div>
-                  </div>
-
-                  {isAuthenticated && (
-                    <>
-                      <div className="my-4 h-px bg-[#E5E7EB]" />
-                      <button
-                        onClick={() => handleLinkClick("/hushh-user-profile")}
-                        className="w-full text-left"
-                      >
-                        <div className="flex items-center h-14 text-[22px] leading-[1.2] text-[#0B1120] font-medium active:bg-[rgba(0,169,224,0.06)] transition-colors duration-150 px-0">
-                          <FiUser className="mr-3" />
-                          {t('nav.viewProfile')}
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsOpen(false);
-                          onDeleteModalOpen();
-                        }}
-                        className="w-full text-left"
-                      >
-                        <div className="flex items-center h-14 text-[22px] leading-[1.2] text-red-600 font-medium active:bg-red-50 transition-colors duration-150 px-0">
-                          <FiTrash2 className="mr-3" />
-                          {t('nav.deleteAccount')}
-                        </div>
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* Scroll Indicator - Animated Down Arrow */}
-                {showScrollIndicator && (
-                  <div className="sticky bottom-0 left-0 right-0 flex justify-center pb-2 pt-4 pointer-events-none bg-gradient-to-t from-white via-white/90 to-transparent">
-                    <div className="scroll-indicator-arrow flex flex-col items-center gap-1">
-                      <span className="text-[10px] font-medium text-[#6B7280] uppercase tracking-wider">Scroll</span>
-                      <FiChevronDown className="w-5 h-5 text-[#0B1120]" />
-                    </div>
-                  </div>
-                )}
+                    <span className={`text-[17px] flex-grow text-left leading-none ${isActive(path) ? 'font-semibold text-[#007AFF]' : 'text-black'}`}>
+                      {label}
+                    </span>
+                    <svg className="w-[7px] h-[12px] text-[#C7C7CC] shrink-0" viewBox="0 0 7 12" fill="none">
+                      <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {/* Separator line (skip last item) */}
+                    {idx < arr.length - 1 && (
+                      <div className="absolute bottom-0 right-0 h-[0.5px] bg-[#C6C6C8]" style={{ width: 'calc(100% - 56px)', marginLeft: '56px' }} />
+                    )}
+                  </button>
+                ))}
               </div>
 
-              {/* Bottom CTA */}
-              <div className="mt-4 -mx-6 px-6 pt-3 pb-4 bg-white sticky bottom-0">
-                <div className="relative h-px w-full bg-[#E5E7EB] mb-4">
-                  <span
-                    aria-hidden
-                    className="absolute left-0 top-1/2 h-[2px] w-4 -translate-y-1/2 bg-[#135bec]"
-                  />
-                </div>
-                {!isAuthenticated ? (
+              {/* Section 2: Contact & FAQ */}
+              <div className="bg-white rounded-[10px] overflow-hidden mb-5 shadow-sm">
+                {[
+                  { path: "/contact", label: t('nav.contact'), icon: "mail", bg: "#8E8E93" },
+                  { path: "/faq", label: t('nav.faq'), icon: "help", bg: "#FF9500" },
+                ].map(({ path, label, icon, bg }, idx, arr) => (
                   <button
-                    onClick={() => handleLinkClick("/Login")}
-                    className="w-full h-[54px] rounded-full text-[17px] font-semibold tracking-[0.01em] text-white bg-[#135bec] shadow-lg shadow-[#135bec]/30 transition-transform duration-150 active:scale-[0.985]"
+                    key={path}
+                    onClick={() => handleLinkClick(path)}
+                    className="flex items-center w-full min-h-[44px] py-2.5 pr-4 pl-4 active:bg-[#E5E5EA] transition-colors relative"
                   >
-                    {t('nav.login')}
+                    <div
+                      className="w-[29px] h-[29px] rounded-[7px] flex items-center justify-center mr-3 shrink-0"
+                      style={{ backgroundColor: bg }}
+                    >
+                      <span className="material-symbols-outlined text-white text-[18px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>{icon}</span>
+                    </div>
+                    <span className={`text-[17px] flex-grow text-left leading-none ${isActive(path) ? 'font-semibold text-[#007AFF]' : 'text-black'}`}>
+                      {label}
+                    </span>
+                    <svg className="w-[7px] h-[12px] text-[#C7C7CC] shrink-0" viewBox="0 0 7 12" fill="none">
+                      <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {idx < arr.length - 1 && (
+                      <div className="absolute bottom-0 right-0 h-[0.5px] bg-[#C6C6C8]" style={{ width: 'calc(100% - 56px)', marginLeft: '56px' }} />
+                    )}
                   </button>
-                ) : (
+                ))}
+              </div>
+
+              {/* Section 3: Hushh Coins — unlock CTA when 0, full card when > 0 */}
+              {isAuthenticated && hushhCoins !== null && hushhCoins === 0 && (
+                <div className="bg-white rounded-[10px] overflow-hidden mb-5 shadow-sm">
+                  <button
+                    onClick={() => handleLinkClick("/onboarding/meet-ceo")}
+                    className="flex items-center w-full min-h-[52px] py-3 pr-4 pl-4 active:bg-[#E5E5EA] transition-colors"
+                  >
+                    <div className="w-[29px] h-[29px] rounded-[7px] bg-[#FF9F0A] flex items-center justify-center mr-3 shrink-0">
+                      <span className="material-symbols-outlined text-white text-[18px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>lock</span>
+                    </div>
+                    <div className="flex flex-col flex-grow text-left">
+                      <span className="text-[17px] text-black font-medium leading-tight">Unlock 300K Coins</span>
+                      <span className="text-[13px] text-[#8E8E93] leading-tight mt-0.5">$1 or use coupon code</span>
+                    </div>
+                    <svg className="w-[7px] h-[12px] text-[#C7C7CC] shrink-0" viewBox="0 0 7 12" fill="none">
+                      <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {isAuthenticated && hushhCoins !== null && hushhCoins > 0 && (
+                <div className="rounded-[10px] overflow-hidden mb-5 shadow-sm">
+                  {/* Coins Balance Card — iOS Wallet style */}
+                  <div className="bg-gradient-to-br from-[#1C1C1E] to-[#2C2C2E] p-4 rounded-t-[10px]">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-[29px] h-[29px] rounded-[7px] bg-[#FF9F0A] flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-white text-[18px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>monetization_on</span>
+                        </div>
+                        <span className="text-[15px] font-semibold text-white/90">Hushh Coins</span>
+                      </div>
+                      <span className="text-[11px] text-white/40 font-medium">HC</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[32px] font-bold text-white leading-none tracking-tight">
+                        {hushhCoins !== null ? hushhCoins.toLocaleString() : '—'}
+                      </span>
+                      <span className="text-[13px] text-white/50 font-medium">coins</span>
+                    </div>
+                    {hushhCoins !== null && hushhCoins > 0 && (
+                      <p className="text-[12px] text-white/40 mt-1.5">≈ ${(hushhCoins / 100).toLocaleString()} value</p>
+                    )}
+                  </div>
+                  {/* Coins Actions — iOS grouped list style */}
+                  <div className="bg-white rounded-b-[10px]">
+                    <button
+                      onClick={() => handleLinkClick("/onboarding/meet-ceo")}
+                      className="flex items-center w-full min-h-[44px] py-2.5 pr-4 pl-4 active:bg-[#E5E5EA] transition-colors relative"
+                    >
+                      <div className="w-[29px] h-[29px] rounded-[7px] bg-[#34C759] flex items-center justify-center mr-3 shrink-0">
+                        <span className="material-symbols-outlined text-white text-[18px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>calendar_month</span>
+                      </div>
+                      <span className="text-[17px] text-black flex-grow text-left leading-none">Book Consultation</span>
+                      <svg className="w-[7px] h-[12px] text-[#C7C7CC] shrink-0" viewBox="0 0 7 12" fill="none">
+                        <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      <div className="absolute bottom-0 right-0 h-[0.5px] bg-[#C6C6C8]" style={{ width: 'calc(100% - 56px)', marginLeft: '56px' }} />
+                    </button>
+                    <button
+                      onClick={() => handleLinkClick("/hushh-user-profile")}
+                      className="flex items-center w-full min-h-[44px] py-2.5 pr-4 pl-4 active:bg-[#E5E5EA] transition-colors"
+                    >
+                      <div className="w-[29px] h-[29px] rounded-[7px] bg-[#5856D6] flex items-center justify-center mr-3 shrink-0">
+                        <span className="material-symbols-outlined text-white text-[18px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>receipt_long</span>
+                      </div>
+                      <span className="text-[17px] text-black flex-grow text-left leading-none">Transaction History</span>
+                      <svg className="w-[7px] h-[12px] text-[#C7C7CC] shrink-0" viewBox="0 0 7 12" fill="none">
+                        <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Section 4: Profile & Account (only when authenticated) */}
+              {isAuthenticated && (
+                <div className="bg-white rounded-[10px] overflow-hidden mb-5 shadow-sm">
+                  <button
+                    onClick={() => handleLinkClick("/hushh-user-profile")}
+                    className="flex items-center w-full min-h-[44px] py-2.5 pr-4 pl-4 active:bg-[#E5E5EA] transition-colors relative"
+                  >
+                    <div className="w-[29px] h-[29px] rounded-[7px] bg-[#007AFF] flex items-center justify-center mr-3 shrink-0">
+                      <span className="material-symbols-outlined text-white text-[18px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>person</span>
+                    </div>
+                    <span className="text-[17px] text-black flex-grow text-left leading-none">
+                      {t('nav.viewProfile')}
+                    </span>
+                    <svg className="w-[7px] h-[12px] text-[#C7C7CC] shrink-0" viewBox="0 0 7 12" fill="none">
+                      <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <div className="absolute bottom-0 right-0 h-[0.5px] bg-[#C6C6C8]" style={{ width: 'calc(100% - 56px)', marginLeft: '56px' }} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsOpen(false);
+                      onDeleteModalOpen();
+                    }}
+                    className="flex items-center w-full min-h-[44px] py-2.5 pr-4 pl-4 active:bg-[#E5E5EA] transition-colors"
+                  >
+                    <span className="text-[17px] text-[#FF3B30] flex-grow text-left leading-none pl-0">
+                      {t('nav.deleteAccount')}
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {/* Spacer to push logout to bottom */}
+              <div className="flex-grow" />
+
+              {/* Log Out / Login Button */}
+              <div className="mt-auto pt-2 pb-6 flex flex-col items-center">
+                {isAuthenticated ? (
                   <button
                     onClick={handleLogout}
-                    className="w-full h-[54px] rounded-full text-[17px] font-semibold tracking-[0.01em] text-[#0B1120] border border-[#E5E7EB] bg-white transition-colors duration-150 active:bg-[#F9FAFB]"
+                    className="w-full h-[50px] rounded-[12px] bg-white text-[#007AFF] font-semibold text-[17px] active:scale-[0.98] active:opacity-90 transition-all flex items-center justify-center shadow-sm"
                   >
                     {t('nav.logout')}
                   </button>
+                ) : (
+                  <button
+                    onClick={() => handleLinkClick("/Login")}
+                    className="w-full h-[50px] rounded-[12px] bg-[#007AFF] text-white font-semibold text-[17px] active:scale-[0.98] active:opacity-90 transition-all flex items-center justify-center shadow-sm"
+                  >
+                    {t('nav.login')}
+                  </button>
                 )}
+                <p className="text-center text-[13px] text-[#8E8E93] font-normal mt-4">
+                  Version 2.4.0 (Build 302)
+                </p>
               </div>
             </div>
           </div>
