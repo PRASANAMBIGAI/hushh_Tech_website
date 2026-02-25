@@ -1,25 +1,24 @@
 /**
  * HushhTechBackHeader — Reusable sticky header with back button
- * Left: square back arrow button. Right: configurable action button (e.g. FAQs).
+ * Left: square back arrow button.
+ * Right: configurable — "label" (e.g. FAQs) OR "hamburger" (black ≡ opens nav drawer).
  *
  * Usage:
- *   <HushhTechBackHeader
- *     onBackClick={() => navigate(-1)}
- *     rightLabel="FAQs"
- *     onRightClick={() => navigate('/faqs')}
- *   />
- *
- *   // Without right button:
+ *   <HushhTechBackHeader onBackClick={() => navigate(-1)} rightLabel="FAQs" />
+ *   <HushhTechBackHeader onBackClick={() => navigate(-1)} rightType="hamburger" />
  *   <HushhTechBackHeader onBackClick={() => navigate(-1)} showRightButton={false} />
  */
-import React from "react";
+import React, { useState } from "react";
+import HushhTechNavDrawer from "../hushh-tech-nav-drawer/HushhTechNavDrawer";
 
 interface HushhTechBackHeaderProps {
   /** Callback when back arrow is clicked */
   onBackClick?: () => void;
-  /** Label for the right-side button */
+  /** Right button type: "label" shows text, "hamburger" shows ≡ icon */
+  rightType?: "label" | "hamburger";
+  /** Label for the right-side button (only used when rightType="label") */
   rightLabel?: string;
-  /** Callback when right button is clicked */
+  /** Callback when right button is clicked (only used when rightType="label") */
   onRightClick?: () => void;
   /** Whether to show the right button (default: true) */
   showRightButton?: boolean;
@@ -29,39 +28,65 @@ interface HushhTechBackHeaderProps {
 
 const HushhTechBackHeader: React.FC<HushhTechBackHeaderProps> = ({
   onBackClick,
+  rightType = "label",
   rightLabel = "FAQs",
   onRightClick,
   showRightButton = true,
   className = "",
 }) => {
-  return (
-    <header
-      className={`px-6 py-6 flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur-md z-40 ${className}`}
-    >
-      {/* Back button */}
-      <button
-        onClick={onBackClick}
-        className="w-10 h-10 border border-black flex items-center justify-center hover:bg-gray-50 transition-colors"
-        aria-label="Go back"
-        tabIndex={0}
-      >
-        <span className="material-symbols-outlined text-gray-900 text-[20px] font-light">
-          west
-        </span>
-      </button>
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-      {/* Right action button — same h-10 as back button */}
-      {showRightButton && (
+  return (
+    <>
+      <header
+        className={`px-6 py-6 flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur-md z-40 ${className}`}
+      >
+        {/* Back button */}
         <button
-          onClick={onRightClick}
-          className="h-10 px-5 border border-black text-[11px] font-bold tracking-widest uppercase text-gray-900 hover:bg-black hover:text-white transition-colors flex items-center justify-center"
-          aria-label={rightLabel}
+          onClick={onBackClick}
+          className="w-10 h-10 border border-black flex items-center justify-center hover:bg-gray-50 transition-colors"
+          aria-label="Go back"
           tabIndex={0}
         >
-          {rightLabel}
+          <span className="material-symbols-outlined text-gray-900 text-[20px] font-light">
+            west
+          </span>
         </button>
+
+        {/* Right action button */}
+        {showRightButton && rightType === "hamburger" && (
+          <button
+            onClick={() => setIsDrawerOpen(true)}
+            className="w-10 h-10 rounded-full bg-black flex items-center justify-center hover:bg-black/80 transition-colors"
+            aria-label="Open menu"
+            tabIndex={0}
+          >
+            <span className="material-symbols-outlined text-white !text-[1.2rem]">
+              menu
+            </span>
+          </button>
+        )}
+
+        {showRightButton && rightType === "label" && (
+          <button
+            onClick={onRightClick}
+            className="h-10 px-5 border border-black text-[11px] font-bold tracking-widest uppercase text-gray-900 hover:bg-black hover:text-white transition-colors flex items-center justify-center"
+            aria-label={rightLabel}
+            tabIndex={0}
+          >
+            {rightLabel}
+          </button>
+        )}
+      </header>
+
+      {/* Nav Drawer — only rendered when hamburger type */}
+      {rightType === "hamburger" && (
+        <HushhTechNavDrawer
+          isOpen={isDrawerOpen}
+          onClose={() => setIsDrawerOpen(false)}
+        />
       )}
-    </header>
+    </>
   );
 };
 

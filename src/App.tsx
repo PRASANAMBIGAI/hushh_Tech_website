@@ -120,12 +120,13 @@ const useLayoutVisibility = () => {
   const isKai = location.pathname.startsWith('/kai');
   const isStudio = location.pathname.startsWith('/studio');
   const isOnboarding = location.pathname.startsWith('/onboarding');
+  const isProfile = location.pathname === '/profile';
 
-  // Home + Onboarding use HushhTechHeader/Footer — hide old global nav/footer
+  // Home + Onboarding + Profile use HushhTechHeader/Footer — hide old global nav/footer
   return {
-    showNavbar: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isHomePage && !isOnboarding,
-    showFooter: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isOnboarding && !isHomePage,
-    showMobileNav: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isOnboarding && !isHomePage,
+    showNavbar: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isHomePage && !isOnboarding && !isProfile,
+    showFooter: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isOnboarding && !isHomePage && !isProfile,
+    showMobileNav: !isHushhAI && !isHushhAgent && !isKai && !isStudio && !isOnboarding && !isHomePage && !isProfile,
   };
 };
 
