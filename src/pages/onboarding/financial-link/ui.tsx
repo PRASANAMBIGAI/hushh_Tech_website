@@ -93,7 +93,7 @@ export default function OnboardingFinancialLink() {
         {/* ── Accounts Summary (shown after Plaid connects) ── */}
         {allAccounts.length > 0 && (
           <section className="mb-8">
-            <h3 className="text-[11px] tracking-wide text-gray-500 uppercase mb-3 font-semibold">
+            <h3 className="text-[10px] tracking-[0.2em] text-gray-400 uppercase mb-3 font-medium">
               Total Balance
             </h3>
             <div className="border border-gray-200 px-4 py-4 mb-4">
@@ -108,7 +108,7 @@ export default function OnboardingFinancialLink() {
             {/* Account groups */}
             {Object.entries(accountGroups).map(([type, accounts]) => (
               <div key={type} className="mb-4">
-                <h4 className="text-[11px] tracking-wide text-gray-500 uppercase mb-2 font-semibold">
+                <h4 className="text-[10px] tracking-[0.2em] text-gray-400 uppercase mb-2 font-medium">
                   {type === 'depository' ? 'Checking & Savings' : type === 'credit' ? 'Credit Cards' : type}
                   {' '}({(accounts as any[]).length})
                 </h4>
@@ -149,32 +149,32 @@ export default function OnboardingFinancialLink() {
         {/* ── Identity Data (shown after Plaid connects) ── */}
         {identityInfo && (
           <section className="mb-8">
-            <h3 className="text-[11px] tracking-wide text-gray-500 uppercase mb-3 font-semibold">
+            <h3 className="text-[10px] tracking-[0.2em] text-gray-400 uppercase mb-3 font-medium">
               Bank-Verified Identity
             </h3>
             <div className="border border-gray-200 divide-y divide-gray-100">
               {identityInfo.names.length > 0 && (
                 <div className="flex items-center px-4 py-3 gap-3">
                   <span className="material-symbols-outlined text-gray-400 text-lg" style={{ fontVariationSettings: "'wght' 300" }}>person</span>
-                  <div><p className="text-xs text-gray-500">name</p><p className="text-sm font-medium text-black">{identityInfo.names.join(', ')}</p></div>
+                  <div><p className="text-xs text-gray-500">Name</p><p className="text-sm font-medium text-black">{identityInfo.names.join(', ')}</p></div>
                 </div>
               )}
               {identityInfo.emails.length > 0 && (
                 <div className="flex items-center px-4 py-3 gap-3">
                   <span className="material-symbols-outlined text-gray-400 text-lg" style={{ fontVariationSettings: "'wght' 300" }}>email</span>
-                  <div><p className="text-xs text-gray-500">email</p><p className="text-sm font-medium text-black">{identityInfo.emails.join(', ')}</p></div>
+                  <div><p className="text-xs text-gray-500">Email</p><p className="text-sm font-medium text-black">{identityInfo.emails.join(', ')}</p></div>
                 </div>
               )}
               {identityInfo.phones.length > 0 && (
                 <div className="flex items-center px-4 py-3 gap-3">
                   <span className="material-symbols-outlined text-gray-400 text-lg" style={{ fontVariationSettings: "'wght' 300" }}>phone</span>
-                  <div><p className="text-xs text-gray-500">phone</p><p className="text-sm font-medium text-black">{identityInfo.phones.join(', ')}</p></div>
+                  <div><p className="text-xs text-gray-500">Phone</p><p className="text-sm font-medium text-black">{identityInfo.phones.join(', ')}</p></div>
                 </div>
               )}
               {identityInfo.addresses.length > 0 && (
                 <div className="flex items-center px-4 py-3 gap-3">
                   <span className="material-symbols-outlined text-gray-400 text-lg" style={{ fontVariationSettings: "'wght' 300" }}>location_on</span>
-                  <div><p className="text-xs text-gray-500">address</p><p className="text-sm font-medium text-black">{identityInfo.addresses[0]}</p></div>
+                  <div><p className="text-xs text-gray-500">Address</p><p className="text-sm font-medium text-black">{identityInfo.addresses[0]}</p></div>
                 </div>
               )}
             </div>
@@ -215,7 +215,7 @@ export default function OnboardingFinancialLink() {
                 </div>
               </div>
               <span
-                className="material-symbols-outlined text-gray-400 text-[20px]"
+                className={`material-symbols-outlined text-[20px] ${row.status === 'success' ? 'text-ios-green' : 'text-gray-400'}`}
                 style={{ fontVariationSettings: "'wght' 200" }}
               >
                 {row.status === 'success' ? 'check_circle' : 'east'}
