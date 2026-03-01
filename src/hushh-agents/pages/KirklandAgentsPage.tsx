@@ -1,8 +1,9 @@
 /**
  * Kirkland Agents — Listing Page
  * 
- * Follows KYC onboarding UI patterns: white bg, HushhTechBackHeader,
- * max-w-md centered layout, Playfair headings, consistent card styling.
+ * Major category filters (Finance, RIA, Insurance, etc.)
+ * MCP badge on every agent card.
+ * Follows KYC onboarding UI patterns.
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -16,6 +17,96 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL || 'https://ibsisfnjxeowvdtvgzff.supabase.co',
   import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 );
+
+/* ── Major Category Definitions ── */
+interface MajorCategory {
+  key: string;
+  label: string;
+  icon: string;
+  keywords: string[];
+}
+
+const MAJOR_CATEGORIES: MajorCategory[] = [
+  {
+    key: 'finance',
+    label: 'Finance',
+    icon: 'account_balance',
+    keywords: ['financial', 'accountant', 'tax', 'bank', 'credit union', 'bookkeeping', 'payroll', 'mortgage', 'loan', 'wealth'],
+  },
+  {
+    key: 'ria',
+    label: 'RIA',
+    icon: 'trending_up',
+    keywords: ['investment', 'advisor', 'portfolio', 'asset management', 'securities', 'hedge fund', 'mutual fund', 'brokerage', 'fiduciary'],
+  },
+  {
+    key: 'insurance',
+    label: 'Insurance',
+    icon: 'shield',
+    keywords: ['insurance', 'life insurance', 'health insurance', 'auto insurance', 'property insurance', 'underwriting'],
+  },
+  {
+    key: 'real-estate',
+    label: 'Real Estate',
+    icon: 'home_work',
+    keywords: ['real estate', 'property', 'realtor', 'housing', 'apartment', 'commercial real estate', 'land'],
+  },
+  {
+    key: 'health',
+    label: 'Health',
+    icon: 'local_hospital',
+    keywords: ['doctor', 'dentist', 'health', 'medical', 'chiropractic', 'optometrist', 'pharmacy', 'clinic', 'hospital', 'therapy', 'mental health', 'veterinar'],
+  },
+  {
+    key: 'legal',
+    label: 'Legal',
+    icon: 'gavel',
+    keywords: ['lawyer', 'legal', 'attorney', 'law firm', 'notary', 'immigration', 'divorce', 'criminal', 'estate planning'],
+  },
+  {
+    key: 'technology',
+    label: 'Tech',
+    icon: 'code',
+    keywords: ['it ', 'software', 'web design', 'technology', 'computer', 'internet', 'data', 'cloud', 'cyber', 'telecom'],
+  },
+  {
+    key: 'home-services',
+    label: 'Home',
+    icon: 'construction',
+    keywords: ['plumb', 'electric', 'contractor', 'landscap', 'roofing', 'paint', 'cleaning', 'handyman', 'hvac', 'pest', 'locksmith', 'moving'],
+  },
+  {
+    key: 'food',
+    label: 'Food',
+    icon: 'restaurant',
+    keywords: ['restaurant', 'cafe', 'coffee', 'bar', 'bakery', 'pizza', 'food', 'catering', 'grocery', 'deli', 'brewery'],
+  },
+  {
+    key: 'auto',
+    label: 'Auto',
+    icon: 'directions_car',
+    keywords: ['auto', 'car', 'vehicle', 'mechanic', 'tire', 'body shop', 'towing', 'oil change', 'transmission'],
+  },
+  {
+    key: 'education',
+    label: 'Education',
+    icon: 'school',
+    keywords: ['school', 'tutor', 'training', 'education', 'university', 'college', 'preschool', 'daycare', 'child care'],
+  },
+  {
+    key: 'beauty',
+    label: 'Beauty',
+    icon: 'spa',
+    keywords: ['salon', 'spa', 'massage', 'beauty', 'hair', 'nail', 'skin', 'barber', 'cosmetic', 'waxing'],
+  },
+];
+
+/** Check if an agent matches a major category */
+const agentMatchesMajor = (categories: string[], major: MajorCategory): boolean => {
+  if (!categories?.length) return false;
+  const joined = categories.join(' ').toLowerCase();
+  return major.keywords.some((kw) => joined.includes(kw.toLowerCase()));
+};
 
 /** Agent type */
 interface KirklandAgent {
@@ -54,7 +145,7 @@ const Stars: React.FC<{ rating: number | null }> = ({ rating }) => {
   );
 };
 
-/** Individual agent card — matches KYC card style */
+/** Individual agent card with MCP badge */
 const AgentCard: React.FC<{ agent: KirklandAgent; featured?: boolean }> = ({ agent, featured }) => {
   const navigate = useNavigate();
 
@@ -68,7 +159,7 @@ const AgentCard: React.FC<{ agent: KirklandAgent; featured?: boolean }> = ({ age
       }`}
       aria-label={`View ${agent.name}`}
     >
-      {/* Top row: avatar + name */}
+      {/* Top row: avatar + name + MCP badge */}
       <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white shrink-0 ${
           featured
@@ -88,6 +179,12 @@ const AgentCard: React.FC<{ agent: KirklandAgent; featured?: boolean }> = ({ age
             </p>
           )}
         </div>
+
+        {/* MCP Badge */}
+        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] font-bold rounded-full uppercase tracking-wider border border-emerald-200/60">
+          MCP
+        </span>
+
         {featured && (
           <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-bold rounded-full uppercase tracking-wider">
             Top
@@ -135,7 +232,7 @@ const KirklandAgentsPage: React.FC = () => {
   const [agents, setAgents] = useState<KirklandAgent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedMajor, setSelectedMajor] = useState<string | null>(null);
 
   // Fetch agents
   useEffect(() => {
@@ -153,11 +250,13 @@ const KirklandAgentsPage: React.FC = () => {
     fetchAgents();
   }, []);
 
-  // Unique categories
-  const allCategories = useMemo(() => {
-    const cats = new Set<string>();
-    agents.forEach(a => a.categories?.forEach(c => cats.add(c)));
-    return Array.from(cats).sort();
+  // Count agents per major category
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    MAJOR_CATEGORIES.forEach((mc) => {
+      counts[mc.key] = agents.filter((a) => agentMatchesMajor(a.categories, mc)).length;
+    });
+    return counts;
   }, [agents]);
 
   // Top 10
@@ -170,6 +269,8 @@ const KirklandAgentsPage: React.FC = () => {
   // Filtered
   const filteredAgents = useMemo(() => {
     let result = agents;
+
+    // Search filter
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(a =>
@@ -178,11 +279,17 @@ const KirklandAgentsPage: React.FC = () => {
         a.categories?.some(c => c.toLowerCase().includes(q))
       );
     }
-    if (selectedCategory) {
-      result = result.filter(a => a.categories?.includes(selectedCategory));
+
+    // Major category filter
+    if (selectedMajor) {
+      const major = MAJOR_CATEGORIES.find((m) => m.key === selectedMajor);
+      if (major) {
+        result = result.filter((a) => agentMatchesMajor(a.categories, major));
+      }
     }
+
     return result;
-  }, [agents, searchQuery, selectedCategory]);
+  }, [agents, searchQuery, selectedMajor]);
 
   // Loading
   if (isLoading) {
@@ -203,7 +310,6 @@ const KirklandAgentsPage: React.FC = () => {
 
   return (
     <div className="bg-white text-gray-900 min-h-screen antialiased flex flex-col selection:bg-hushh-blue selection:text-white">
-      {/* Header — matches KYC back header */}
       <HushhTechBackHeader onBackClick={() => navigate('/hushh-agents')} rightLabel="FAQs" />
 
       <main className="px-6 flex-grow max-w-md mx-auto w-full pb-48">
@@ -221,7 +327,7 @@ const KirklandAgentsPage: React.FC = () => {
             <span className="text-gray-400 italic font-light">Agents</span>
           </h1>
           <p className="text-gray-500 text-[13px] font-light mt-3 leading-relaxed">
-            Browse {agents.length} local agents. Search by name, city, or category.
+            {agents.length} agents with MCP endpoints. Filter by category.
           </p>
         </section>
 
@@ -250,37 +356,55 @@ const KirklandAgentsPage: React.FC = () => {
           </div>
         </section>
 
-        {/* ── Category Filter Chips ── */}
+        {/* ── Major Category Filter Grid ── */}
         <section className="pb-6">
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 mb-3 font-medium">
+            Filter by Category
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {/* All button */}
             <button
-              onClick={() => setSelectedCategory(null)}
-              className={`px-3.5 py-2 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
-                !selectedCategory
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              onClick={() => setSelectedMajor(null)}
+              className={`flex flex-col items-center justify-center gap-1 p-3 rounded-2xl border transition-all ${
+                !selectedMajor
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white text-gray-500 border-gray-200/60 hover:border-gray-300'
               }`}
             >
-              All
+              <span className="material-symbols-outlined text-[20px]">apps</span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider">All</span>
+              <span className={`text-[8px] font-medium ${!selectedMajor ? 'text-gray-300' : 'text-gray-400'}`}>
+                {agents.length}
+              </span>
             </button>
-            {allCategories.slice(0, 15).map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-                className={`px-3.5 py-2 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
-                  selectedCategory === cat
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+
+            {MAJOR_CATEGORIES.map((mc) => {
+              const count = categoryCounts[mc.key] || 0;
+              if (count === 0) return null;
+              const isActive = selectedMajor === mc.key;
+              return (
+                <button
+                  key={mc.key}
+                  onClick={() => setSelectedMajor(isActive ? null : mc.key)}
+                  className={`flex flex-col items-center justify-center gap-1 p-3 rounded-2xl border transition-all ${
+                    isActive
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-500 border-gray-200/60 hover:border-gray-300'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[20px]">{mc.icon}</span>
+                  <span className="text-[9px] font-semibold uppercase tracking-wider">{mc.label}</span>
+                  <span className={`text-[8px] font-medium ${isActive ? 'text-gray-300' : 'text-gray-400'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
 
         {/* ── Top Recommended ── */}
-        {!searchQuery && !selectedCategory && topAgents.length > 0 && (
+        {!searchQuery && !selectedMajor && topAgents.length > 0 && (
           <section className="pb-8">
             <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 mb-3 font-medium flex items-center gap-1.5">
               <span className="material-symbols-outlined text-amber-400 text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
@@ -299,7 +423,7 @@ const KirklandAgentsPage: React.FC = () => {
         {/* ── All Agents / Search Results ── */}
         <section className="pb-8">
           <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 mb-3 font-medium">
-            {searchQuery || selectedCategory
+            {searchQuery || selectedMajor
               ? `Results · ${filteredAgents.length}`
               : `All Agents · ${agents.length}`}
           </p>
@@ -310,7 +434,7 @@ const KirklandAgentsPage: React.FC = () => {
                 search_off
               </span>
               <p className="text-gray-500 text-[13px] font-light">No agents found</p>
-              <p className="text-gray-400 text-[11px] font-light mt-1">Try a different search</p>
+              <p className="text-gray-400 text-[11px] font-light mt-1">Try a different category or search</p>
             </div>
           ) : (
             <div className="space-y-3">
