@@ -13,8 +13,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Gemini API configuration
+// Gemini API configuration - support both direct API and Vertex AI
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const VERTEX_AI_URL = "https://us-central1-aiplatform.googleapis.com/v1/projects";
 const DEFAULT_MODEL = "gemini-2.0-flash";
 
 interface ChatMessage {
@@ -37,15 +38,20 @@ serve(async (req: Request) => {
 
   try {
     // Get API key from environment (secure - not exposed to client)
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    // Try multiple keys in order of preference
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || 
+                           Deno.env.get("GOOGLE_API_KEY") || 
+                           Deno.env.get("GCP_API_KEY");
     
     if (!GEMINI_API_KEY) {
-      console.error("[gemini-chat] GEMINI_API_KEY not configured");
+      console.error("[gemini-chat] No API key configured (tried GEMINI_API_KEY, GOOGLE_API_KEY, GCP_API_KEY)");
       return new Response(
         JSON.stringify({ error: "API key not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    
+    console.log(`[gemini-chat] API key found (length: ${GEMINI_API_KEY.length})`);
 
     // Parse request
     const { message, history = [], language = "en-US", model = DEFAULT_MODEL }: ChatRequest = await req.json();

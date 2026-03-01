@@ -187,12 +187,11 @@ async function withRetry<T>(
 }
 
 // =============================================================================
-// SUPABASE EDGE FUNCTION CONFIGURATION
+// VERCEL SERVERLESS FUNCTION CONFIGURATION
 // =============================================================================
 
-// Supabase Edge Function URL - API key is secure on server side
-const SUPABASE_PROJECT_ID = 'ibsisfnjxeowvdtvgzff';
-const EDGE_FUNCTION_URL = `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/gemini-chat`;
+// Vercel API endpoint - API key is secure on server side
+const API_ENDPOINT = '/api/gemini-chat';
 
 // =============================================================================
 // MAIN CHAT FUNCTION (SECURE - USES EDGE FUNCTION)
@@ -214,14 +213,12 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
       parts: [{ text: msg.content }],
     }));
     
-    // Call the secure Supabase Edge Function
+    // Call the secure Vercel API endpoint
     const response = await withRetry(async () => {
-      const res = await fetch(EDGE_FUNCTION_URL, {
+      const res = await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Use Supabase anon key for public access
-          'apikey': config.SUPABASE_ANON_KEY || '',
         },
         body: JSON.stringify({
           message,
