@@ -8,7 +8,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import HushhLogo from '../assets/Hushhogo.png';
+import HushhLogo from '../../components/images/Hushhogo.png';
 
 /* ── Fonts ── */
 const serif = { fontFamily: "'Playfair Display', serif" };

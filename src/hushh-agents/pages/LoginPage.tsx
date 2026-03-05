@@ -10,7 +10,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { FaApple } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../hooks/useAuth';
-import HushhLogo from '../assets/Hushhogo.png';
+import HushhLogo from '../../components/images/Hushhogo.png';
 
 const playfair = { fontFamily: "'Playfair Display', serif" };
 

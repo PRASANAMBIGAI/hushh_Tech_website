@@ -14,7 +14,7 @@ import { FaApple } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from './hooks/useAuth';
 import { HUSHH_BRANDING } from './core/constants';
-import HushhLogo from './assets/Hushhogo.png';
+import HushhLogo from '../components/images/Hushhogo.png';
 
 // Lazy load pages
 const HomePage = lazy(() => import('./pages/HomePage'));
