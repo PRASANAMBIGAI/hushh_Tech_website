@@ -56,19 +56,22 @@ import PrivacyControlsPage from './pages/hushh-user-profile/privacy';
 import PublicHushhProfilePage from './pages/hushhid';
 import PublicInvestorProfilePage from './pages/investor/PublicInvestorProfile';
 import HushhIDHeroDemo from './pages/hushhid-hero-demo';
-import FinancialLinkPage from './pages/onboarding/financial-link/ui';
-import OnboardingStep1 from './pages/onboarding/step-1/ui';
-import OnboardingStep2 from './pages/onboarding/step-2/ui';
-import OnboardingStep4 from './pages/onboarding/step-4/ui';
-import OnboardingStep5 from './pages/onboarding/step-5/ui';
-import OnboardingStep7 from './pages/onboarding/step-7/ui';
-// Step 8 merged into Step 4 — redirect kept for backward compatibility
-import OnboardingStep9 from './pages/onboarding/step-9/ui';
-import OnboardingStep11 from './pages/onboarding/step-11/ui';
-import OnboardingStep13 from './pages/onboarding/step-13/ui';
-import VerifyIdentityPage from './pages/onboarding/verify-identity/ui';
-import VerifyCompletePage from './pages/onboarding/verify-complete/ui';
-import MeetCeoPage from './pages/onboarding/meet-ceo/ui';
+import FinancialLinkPage from './pages/onboarding/FinancialLink';
+import OnboardingStep1 from './pages/onboarding/Step1';
+import OnboardingStep2 from './pages/onboarding/Step2';
+import OnboardingStep3 from './pages/onboarding/Step3';
+import OnboardingStep4 from './pages/onboarding/Step4';
+import OnboardingStep5 from './pages/onboarding/Step5';
+import OnboardingStep6 from './pages/onboarding/Step6';
+import OnboardingStep7 from './pages/onboarding/Step7';
+import OnboardingStep8 from './pages/onboarding/Step8';
+import OnboardingStep9 from './pages/onboarding/Step9';
+import OnboardingStep11 from './pages/onboarding/Step11';
+import OnboardingStep12 from './pages/onboarding/Step12';
+import OnboardingStep13 from './pages/onboarding/Step13';
+import VerifyIdentityPage from './pages/onboarding/VerifyIdentity';
+import VerifyCompletePage from './pages/onboarding/VerifyComplete';
+import MeetCeoPage from './pages/onboarding/MeetCeo';
 import InvestorGuidePage from './pages/onboarding/InvestorGuide';
 import KYCDemoPage from './pages/kyc-demo';
 import KycFlowPage from './pages/kyc-flow';
@@ -212,7 +215,7 @@ function App() {
   // Inner layout component that uses hooks for conditional rendering
   const AppLayout = () => {
     const { showNavbar, showFooter, showMobileNav } = useLayoutVisibility();
-    
+
     return (
       <div className="min-h-screen flex flex-col">
         {/* Navbar - Only show for non-Hushh AI routes */}
@@ -275,6 +278,11 @@ function App() {
                 <OnboardingStep2 />
               </ProtectedRoute>
             } />
+            <Route path="/onboarding/step-3" element={
+              <ProtectedRoute>
+                <OnboardingStep3 />
+              </ProtectedRoute>
+            } />
             <Route path="/onboarding/step-4" element={
               <ProtectedRoute>
                 <OnboardingStep4 />
@@ -287,7 +295,7 @@ function App() {
             } />
             <Route path="/onboarding/step-6" element={
               <ProtectedRoute>
-                <Navigate to="/onboarding/step-5" replace />
+                <OnboardingStep6 />
               </ProtectedRoute>
             } />
             <Route path="/onboarding/step-7" element={
@@ -295,8 +303,11 @@ function App() {
                 <OnboardingStep7 />
               </ProtectedRoute>
             } />
-            {/* Step 8 merged into Step 4 — redirect for backward compat */}
-            <Route path="/onboarding/step-8" element={<Navigate to="/onboarding/step-9" replace />} />
+            <Route path="/onboarding/step-8" element={
+              <ProtectedRoute>
+                <OnboardingStep8 />
+              </ProtectedRoute>
+            } />
             <Route path="/onboarding/step-9" element={
               <ProtectedRoute>
                 <OnboardingStep9 />
@@ -314,7 +325,7 @@ function App() {
             } />
             <Route path="/onboarding/step-12" element={
               <ProtectedRoute>
-                <Navigate to="/onboarding/step-11" replace />
+                <OnboardingStep12 />
               </ProtectedRoute>
             } />
             <Route path="/onboarding/step-13" element={
