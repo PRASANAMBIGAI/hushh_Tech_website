@@ -91,6 +91,37 @@ import GlobalNDAGate from './components/GlobalNDAGate';
 import SignNDAPage from './pages/sign-nda';
 import NDAAdminPage from './pages/nda-admin';
 
+// ─── Fundraising Workflow Pages ───────────────────────────────────────────────
+import { FundriseProvider } from './contexts/FundriseContext';
+// Questions
+import QuestionAccountType from './pages/fundraise/questions/AccountType';
+import QuestionIntro from './pages/fundraise/questions/Intro';
+import QuestionSuccess from './pages/fundraise/questions/Success';
+import QuestionMotivation from './pages/fundraise/questions/Motivation';
+import QuestionIncomeV2 from './pages/fundraise/questions/IncomeV2';
+import QuestionSatisfiedInvestment from './pages/fundraise/questions/SatisfiedInvestment';
+import QuestionAccreditation from './pages/fundraise/questions/Accreditation';
+import QuestionQualifiedPurchaser from './pages/fundraise/questions/QualifiedPurchaser';
+import QuestionHdyh from './pages/fundraise/questions/Hdyh';
+// Checkout
+import InvestmentRecommendation from './pages/fundraise/checkout/InvestmentRecommendation';
+import SelectFundInvestmentList from './pages/fundraise/checkout/SelectFundInvestmentList';
+import SelectFundInvestmentDetail from './pages/fundraise/checkout/SelectFundInvestmentDetail';
+import SelectCountry from './pages/fundraise/checkout/SelectCountry';
+import SelectAccountForm from './pages/fundraise/checkout/SelectAccountForm';
+import PhoneNumber from './pages/fundraise/checkout/PhoneNumber';
+import IndividualProfileForm from './pages/fundraise/checkout/IndividualProfileForm';
+import TaxReportingForm from './pages/fundraise/checkout/TaxReportingForm';
+import PaymentAmount from './pages/fundraise/checkout/PaymentAmount';
+import AutoInvest from './pages/fundraise/checkout/AutoInvest';
+import SelectPaymentMethod from './pages/fundraise/checkout/SelectPaymentMethod';
+// Signup Checkout
+import SignupCheckout from './pages/fundraise/signupCheckout/Signup';
+// Info pages
+import InfoPersonalDetails from './pages/fundraise/info/PersonalDetails';
+import InfoInvest from './pages/fundraise/info/Invest';
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Google Analytics configuration
 const GA_TRACKING_ID = 'G-R58S9WWPM0';
 
@@ -101,6 +132,11 @@ const ContentWrapper = ({ children }: { children: ReactNode }) => {
   const isAuthCallback = location.pathname.startsWith('/auth/callback');
   const isUserRegistration = location.pathname === '/user-registration';
   const isOnboarding = location.pathname.startsWith('/onboarding');
+  const isFundraising = location.pathname.startsWith('/questions') ||
+    location.pathname.startsWith('/reits/') ||
+    location.pathname.startsWith('/info/personal-details') ||
+    location.pathname.startsWith('/info/invest') ||
+    location.pathname.startsWith('/reits/signup-checkout');
   const isKycFlow = location.pathname.startsWith('/kyc-flow');
   const isA2APlayground = location.pathname.startsWith('/a2a-playground');
   const isInvestorGuide = location.pathname === '/investor-guide';
@@ -119,7 +155,7 @@ const ContentWrapper = ({ children }: { children: ReactNode }) => {
   const isSignup = location.pathname.toLowerCase() === '/signup';
 
   return (
-    <div className={`${isHomePage || isAuthCallback || isUserRegistration || isOnboarding || isKycFlow || isA2APlayground || isInvestorGuide || isHushhAI || isHushhAgent || isHushhAgents || isKai || isStudio || isHushhUserProfile || isSignNda || isInvestorProfile || isDiscoverFundA || isCommunity || isDeleteAccount || isLogin || isSignup ? '' : 'mt-20'}`}>
+    <div className={`${isHomePage || isAuthCallback || isUserRegistration || isOnboarding || isKycFlow || isA2APlayground || isInvestorGuide || isHushhAI || isHushhAgent || isHushhAgents || isKai || isStudio || isHushhUserProfile || isSignNda || isInvestorProfile || isDiscoverFundA || isCommunity || isDeleteAccount || isLogin || isSignup || isFundraising ? '' : 'mt-20'}`}>
       {children}
     </div>
   );
@@ -142,9 +178,14 @@ const useLayoutVisibility = () => {
   const isLogin = location.pathname.toLowerCase() === '/login';
   const isSignup = location.pathname.toLowerCase() === '/signup';
   const isSignNda = location.pathname.startsWith('/sign-nda');
+  const isFundraising = location.pathname.startsWith('/questions') ||
+    location.pathname.startsWith('/reits/') ||
+    location.pathname.startsWith('/info/personal-details') ||
+    location.pathname.startsWith('/info/invest') ||
+    location.pathname.startsWith('/reits/signup-checkout');
 
-  // Home + Onboarding + Profile + Fund A + Community + Delete Account + Login + Signup + Sign NDA + Hushh Agents use HushhTechHeader/Footer — hide old global nav/footer
-  const hideOld = isHushhAI || isHushhAgent || isHushhAgents || isKai || isStudio || isHomePage || isOnboarding || isProfile || isFundA || isCommunity || isDeleteAccount || isLogin || isSignup || isSignNda;
+  // Home + Onboarding + Profile + Fund A + Community + Delete Account + Login + Signup + Sign NDA + Fundraising use HushhTechHeader/Footer — hide old global nav/footer
+  const hideOld = isHushhAI || isHushhAgent || isHushhAgents || isKai || isStudio || isHomePage || isOnboarding || isProfile || isFundA || isCommunity || isDeleteAccount || isLogin || isSignup || isSignNda || isFundraising;
   return {
     showNavbar: !hideOld,
     showFooter: !hideOld,
@@ -456,6 +497,38 @@ function App() {
             {/* Hushh Agents - Multi-lingual AI Chat Platform */}
             {/* Powered by GCP Gemini Live API - Hindi, English, Tamil support */}
             <Route path='/hushh-agents/*' element={<HushhAgentsApp />} />
+
+            {/* ═══════════════════════════════════════════════════════════
+                FUNDRAISING WORKFLOW — Fundrise-inspired investor onboarding
+                All steps are protected (auth required)
+                ═══════════════════════════════════════════════════════════ */}
+            {/* Questions */}
+            <Route path='/questions/account_type' element={<ProtectedRoute><QuestionAccountType /></ProtectedRoute>} />
+            <Route path='/questions/intro' element={<ProtectedRoute><QuestionIntro /></ProtectedRoute>} />
+            <Route path='/questions/success' element={<ProtectedRoute><QuestionSuccess /></ProtectedRoute>} />
+            <Route path='/questions/motivation' element={<ProtectedRoute><QuestionMotivation /></ProtectedRoute>} />
+            <Route path='/questions/income-v2' element={<ProtectedRoute><QuestionIncomeV2 /></ProtectedRoute>} />
+            <Route path='/questions/satisfied-investment' element={<ProtectedRoute><QuestionSatisfiedInvestment /></ProtectedRoute>} />
+            <Route path='/questions/accreditation' element={<ProtectedRoute><QuestionAccreditation /></ProtectedRoute>} />
+            <Route path='/questions/qualified-purchaser' element={<ProtectedRoute><QuestionQualifiedPurchaser /></ProtectedRoute>} />
+            <Route path='/questions/hdyh' element={<ProtectedRoute><QuestionHdyh /></ProtectedRoute>} />
+            {/* Checkout */}
+            <Route path='/reits/checkout/investment-recommendation' element={<ProtectedRoute><InvestmentRecommendation /></ProtectedRoute>} />
+            <Route path='/reits/checkout/select-fund-investment-list' element={<ProtectedRoute><SelectFundInvestmentList /></ProtectedRoute>} />
+            <Route path='/reits/checkout/select-fund-investment-detail' element={<ProtectedRoute><SelectFundInvestmentDetail /></ProtectedRoute>} />
+            <Route path='/reits/checkout/select-country' element={<ProtectedRoute><SelectCountry /></ProtectedRoute>} />
+            <Route path='/reits/checkout/select-account-form' element={<ProtectedRoute><SelectAccountForm /></ProtectedRoute>} />
+            <Route path='/reits/checkout/phone-number' element={<ProtectedRoute><PhoneNumber /></ProtectedRoute>} />
+            <Route path='/reits/checkout/individual-profile-form' element={<ProtectedRoute><IndividualProfileForm /></ProtectedRoute>} />
+            <Route path='/reits/checkout/tax-reporting-form' element={<ProtectedRoute><TaxReportingForm /></ProtectedRoute>} />
+            <Route path='/reits/checkout/payment-amount' element={<ProtectedRoute><PaymentAmount /></ProtectedRoute>} />
+            <Route path='/reits/checkout/auto-invest' element={<ProtectedRoute><AutoInvest /></ProtectedRoute>} />
+            <Route path='/reits/checkout/select-payment-method' element={<ProtectedRoute><SelectPaymentMethod /></ProtectedRoute>} />
+            {/* Signup Checkout */}
+            <Route path='/reits/signup-checkout/signup' element={<ProtectedRoute><SignupCheckout /></ProtectedRoute>} />
+            {/* Info pages */}
+            <Route path='/info/personal-details' element={<ProtectedRoute><InfoPersonalDetails /></ProtectedRoute>} />
+            <Route path='/info/invest' element={<ProtectedRoute><InfoInvest /></ProtectedRoute>} />
           </Routes>
         </ContentWrapper>
         {/* Footer - Only show for non-Hushh AI routes */}
@@ -472,7 +545,9 @@ function App() {
         <ScrollToTop />
         <OnboardingShellAutoPadding />
         <GlobalNDAGate session={session}>
-          <AppLayout />
+          <FundriseProvider>
+            <AppLayout />
+          </FundriseProvider>
         </GlobalNDAGate>
       </Router>
     </ChakraProvider>
