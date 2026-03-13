@@ -56,8 +56,6 @@ export default function OnboardingStep1() {
     handleCustomAmountChange,
     setFrequency,
     setInvestmentDay,
-    recurringEnabled,
-    setRecurringEnabled,
     handleNext,
     handleBack,
   } = useStep1Logic();
@@ -201,22 +199,11 @@ export default function OnboardingStep1() {
             >
               Recurring Investment
             </h3>
-            <div className="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
-              <input
-                    className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 checked:right-0 checked:border-hushh-blue transition-all duration-300"
-                id="recurring-toggle"
-                type="checkbox"
-                checked={recurringEnabled}
-                onChange={(e) => setRecurringEnabled(e.target.checked)}
-              />
-              <label
-                className="toggle-label block overflow-hidden h-5 rounded-full bg-gray-200 cursor-pointer transition-colors duration-300"
-                htmlFor="recurring-toggle"
-              />
-            </div>
+            <span className="px-2.5 py-1 bg-red-50 text-red-600 text-[10px] font-semibold rounded-full border border-red-200 uppercase tracking-wide">
+              Required
+            </span>
           </div>
 
-          {recurringEnabled && (
           <div className="space-y-0">
             {/* ── Frequency: selectable pills ── */}
             <div className="py-5 border-b border-gray-100">
@@ -357,7 +344,6 @@ export default function OnboardingStep1() {
               </div>
             </div>
           </div>
-          )}
         </section>
 
         {/* ── Error message ── */}

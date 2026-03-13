@@ -70,7 +70,6 @@ export interface Step1Logic {
   totalInvestment: number;
   hasSelection: boolean;
   recurringEnabled: boolean;
-  setRecurringEnabled: (enabled: boolean) => void;
   handleUnitChange: (classId: string, delta: number) => void;
   handleAmountClick: (amount: number) => void;
   handleCustomAmountChange: (e: ChangeEvent<HTMLInputElement>) => void;
@@ -93,18 +92,8 @@ export const useStep1Logic = (): Step1Logic => {
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [customAmountError, setCustomAmountError] = useState<string | null>(null);
-  const [recurringEnabled, setRecurringEnabledRaw] = useState(false);
-
-  /* When recurring is toggled OFF, clear recurring-related state */
-  const setRecurringEnabled = (enabled: boolean) => {
-    setRecurringEnabledRaw(enabled);
-    if (!enabled) {
-      setSelectedAmount(null);
-      setCustomAmount('');
-      setCustomAmountError(null);
-      setError(null);
-    }
-  };
+  /* Recurring investment is compulsory — always enabled */
+  const recurringEnabled = true;
 
   const totalInvestment = SHARE_CLASSES.reduce((t, sc) => t + units[sc.id] * sc.unitPrice, 0);
   const hasSelection = Object.values(units).some((c) => c > 0);
@@ -249,7 +238,7 @@ export const useStep1Logic = (): Step1Logic => {
   return {
     units, frequency, investmentDay, selectedAmount, customAmount, customAmountError,
     error, isLoading, isFooterVisible, totalInvestment, hasSelection,
-    recurringEnabled, setRecurringEnabled,
+    recurringEnabled,
     handleUnitChange, handleAmountClick, handleCustomAmountChange,
     setFrequency, setInvestmentDay, handleNext, handleBack,
   };
