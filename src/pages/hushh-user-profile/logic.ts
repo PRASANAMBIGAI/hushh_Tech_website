@@ -115,6 +115,9 @@ export const useHushhUserProfileLogic = () => {
   const [isApplePassLoading, setIsApplePassLoading] = useState(false);
   const [isGooglePassLoading, setIsGooglePassLoading] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
+  // Dirty tracking — true when user manually edits any form field
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   // Shadow Investigator state
   const [shadowProfile, setShadowProfile] = useState<ShadowProfile | null>(null);
   const [shadowLoading, setShadowLoading] = useState(false);
@@ -474,6 +477,8 @@ export const useHushhUserProfileLogic = () => {
       if (digitsOnly.length > 15) return;
     }
     setForm((prev) => ({ ...prev, [key]: key === "age" || key === "initialInvestmentAmount" ? Number(value) || "" : value }));
+    // Mark form as dirty when user edits any field
+    setIsDirty(true);
   };
 
   // Helper: save partial profile data to Supabase (called by each API independently)
@@ -634,6 +639,7 @@ export const useHushhUserProfileLogic = () => {
   };
 
   // handleSave — directly calls handleSubmit (no <form> tag needed)
+  // Used by "Enhance with AI" button — triggers AI generation
   const handleSave = () => {
     if (loading || isProcessing) return;
     if (!userId) {
@@ -642,6 +648,30 @@ export const useHushhUserProfileLogic = () => {
     }
     // Call handleSubmit directly — no form element needed
     handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+  };
+
+  /**
+   * handleSaveChanges — saves ONLY manual form edits to Supabase
+   * No AI calls. Just a simple upsert of editable fields.
+   * Only enabled when isDirty === true (user has edited something).
+   */
+  const handleSaveChanges = async () => {
+    if (isSaving || !isDirty || !userId) return;
+
+    const supabase = resources.config.supabaseClient;
+    if (!supabase) return;
+
+    setIsSaving(true);
+    try {
+      await saveToSupabase({});
+      setIsDirty(false);
+      toast({ title: "Changes saved", description: "Your profile details have been updated", status: "success", duration: 3000 });
+    } catch (err) {
+      console.error("[Profile] Save changes failed:", err);
+      toast({ title: "Save failed", description: "Could not save your changes. Please try again.", status: "error", duration: 4000 });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Handle Apple Wallet pass download
@@ -814,6 +844,7 @@ export const useHushhUserProfileLogic = () => {
     editingField, setEditingField, shadowProfile, shadowLoading, nwsResult, nwsLoading,
     isFooterVisible, hasCopied, onCopy, profileUrl, navigate, toast,
     FIELD_OPTIONS, MULTI_SELECT_FIELDS, COUNTRIES, defaultFormState,
+    isDirty, isSaving, handleSaveChanges,
     handleUpdateAIField, handleMultiSelectToggle, handleChange, handleSubmit,
     handleBack, handleSave, handleAppleWalletPass, handleGoogleWalletPass,
     handleShareWhatsApp, handleShareX, handleShareEmail, handleShareLinkedIn, handleOpenProfile,

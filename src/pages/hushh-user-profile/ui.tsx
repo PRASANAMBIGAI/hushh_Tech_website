@@ -39,6 +39,7 @@ const HushhUserProfilePage: React.FC = () => {
     hasOnboardingData, isApplePassLoading, isGooglePassLoading, nwsResult, nwsLoading,
     hasCopied, onCopy, profileUrl, navigate,
     handleChange, handleSubmit, handleBack, handleSave,
+    isDirty, isSaving, handleSaveChanges,
     handleAppleWalletPass, handleGoogleWalletPass, COUNTRIES,
     editingField, setEditingField, FIELD_OPTIONS, MULTI_SELECT_FIELDS,
     handleUpdateAIField, handleMultiSelectToggle, getConfidenceLabel, getConfidenceBadgeClass,
@@ -482,8 +483,8 @@ const HushhUserProfilePage: React.FC = () => {
 
         {/* ── CTAs ── */}
         <section className="pb-12 space-y-3">
-          <HushhTechCta variant={HushhTechCtaVariant.BLACK} onClick={handleSave} disabled={loading}>
-            {loading ? "Saving..." : "Save Changes"}
+          <HushhTechCta variant={HushhTechCtaVariant.BLACK} onClick={handleSaveChanges} disabled={!isDirty || isSaving}>
+            {isSaving ? "Saving..." : isDirty ? "Save Changes" : "No Changes to Save"}
           </HushhTechCta>
           <HushhTechCta variant={HushhTechCtaVariant.WHITE} onClick={() => navigate("/")}>
             Go to Home
