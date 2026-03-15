@@ -86,14 +86,32 @@ export default function OnboardingStep13() {
             className="text-[2.75rem] leading-[1.1] font-normal text-black tracking-tight font-serif"
             style={{ fontFamily: "'Playfair Display', serif" }}
           >
-            Bank
+            Manual Bank
             <br />
-            <span className="text-gray-400 italic font-light">Details</span>
+            <span className="text-gray-400 italic font-light">Verification</span>
           </h1>
           <p className="text-sm text-gray-500 mt-4 leading-relaxed font-light">
-            Provide your banking information for investment transfers securely.
+            We were unable to retrieve your bank details automatically.
+            Please enter them below so we can securely process your investment transfers.
           </p>
         </section>
+
+        {/* ── Contextual Info Banner ── */}
+        {!pageLoading && plaidAccounts.length === 0 && !autoFillMessage && (
+          <div className="mb-6 flex items-start gap-3 py-4 px-1 border-b border-amber-100">
+            <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-amber-600 text-lg" style={{ fontVariationSettings: "'FILL' 1, 'wght' 500" }}>info</span>
+            </div>
+            <div className="flex-1 pt-1.5">
+              <p className="text-sm font-medium text-gray-800 mb-1">Why am I seeing this?</p>
+              <p className="text-xs text-gray-500 leading-relaxed font-light">
+                Your linked bank did not return the account and routing details needed for wire transfers.
+                This can happen if your bank does not support automated retrieval.
+                Simply fill in the fields below to complete your setup.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── Page Loading Shimmer ── */}
         {pageLoading && (
