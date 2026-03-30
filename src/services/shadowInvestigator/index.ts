@@ -95,8 +95,8 @@ export interface ShadowInvestigatorResult {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 
 /**
- * Calls the Shadow Investigator API to perform deep profile enrichment
- * Uses Gemini 3 Pro Preview with Google Search grounding
+ * Calls the Shadow Investigator API to perform deep profile enrichment.
+ * Requires a valid authenticated Supabase session.
  * 
  * @param params - Name, email, phone (with country code), and optional country
  * @returns ShadowInvestigatorResult with structured profile data
@@ -119,12 +119,19 @@ export const invokeShadowInvestigator = async (
       const { data: { session } } = await supabase.auth.getSession();
       authToken = session?.access_token || '';
     }
+
+    if (!authToken) {
+      return {
+        success: false,
+        error: 'Please sign in again to generate your shadow profile.',
+      };
+    }
     
     const response = await fetch(`${SUPABASE_URL}/functions/v1/shadow-investigator`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': authToken ? `Bearer ${authToken}` : '',
+        'Authorization': `Bearer ${authToken}`,
       },
       body: JSON.stringify({
         name: params.name,
@@ -138,10 +145,23 @@ export const invokeShadowInvestigator = async (
     
     if (!response.ok) {
       const errorText = await response.text();
+      let errorMessage = `Request failed with status ${response.status}`;
+
+      try {
+        const parsed = JSON.parse(errorText) as { error?: string };
+        if (parsed.error?.trim()) {
+          errorMessage = parsed.error.trim();
+        }
+      } catch {
+        if (errorText.trim()) {
+          errorMessage = errorText.trim();
+        }
+      }
+
       console.error('[ShadowInvestigator] API Error:', errorText);
       return {
         success: false,
-        error: `API Error: ${response.status} - ${errorText}`,
+        error: errorMessage,
       };
     }
     

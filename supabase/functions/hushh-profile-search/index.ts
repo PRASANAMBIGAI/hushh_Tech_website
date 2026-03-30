@@ -1,11 +1,15 @@
 // Hushh Profile Search API - Supabase Edge Function
 // Advanced Profile Intelligence Engine v2.0
-// Uses Gemini 3 Pro Preview via Vertex AI with Google Search grounding
+// Uses Gemini via Vertex AI with Google Search grounding
 // Features: Phone Intelligence, Email Domain Analysis, Multi-Phase Search, Name Variants
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import md5 from "blueimp-md5";
 import { corsHeaders } from "../_shared/cors.ts";
+import {
+  buildVertexGenerateContentEndpoint,
+  HUSHH_PROFILE_SEARCH_VERTEX_CONFIG,
+} from "../_shared/vertexEndpoints.ts";
 import type { 
   ProfileResult, 
   StructuredData, 
@@ -16,10 +20,7 @@ import type {
   SearchParams 
 } from "./types.ts";
 
-// Vertex AI Configuration
 const PROJECT_ID = Deno.env.get("GCP_PROJECT_ID") || "hushone-app";
-const MODEL_ID = "gemini-3-pro-preview";
-const VERTEX_AI_LOCATION = "global";
 
 // =============================================================================
 // PHONE NUMBER INTELLIGENCE
@@ -307,15 +308,10 @@ const generateNameVariants = (fullName: string): NameVariants => {
 
 // Get OAuth access token for Vertex AI
 const getAccessToken = async (): Promise<string> => {
-  // Try different token sources - check for fresh OAuth token first
-  const accessToken = Deno.env.get("GCP_ACCESS_TOKEN") || Deno.env.get("GOOGLE_ACCESS_TOKEN");
-  if (accessToken && accessToken.length > 50) {
-    console.log("Using GCP_ACCESS_TOKEN from environment");
-    return accessToken;
-  }
-  
-  // Try to get token from service account JSON
-  const serviceAccountJson = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON");
+  // PRIORITY 1: Always try to generate fresh token from service account (never expires)
+  const serviceAccountJson = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON") ||
+                              Deno.env.get("GCP_SERVICE_ACCOUNT_KEY") ||
+                              Deno.env.get("GCP_SERVICE_ACCOUNT_JSON");
   if (serviceAccountJson) {
     try {
       console.log("Attempting to generate access token from service account...");
@@ -432,10 +428,13 @@ const getAccessToken = async (): Promise<string> => {
 const callVertexAI = async (prompt: string): Promise<any> => {
   const accessToken = await getAccessToken();
   
-  const endpoint = `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${VERTEX_AI_LOCATION}/publishers/google/models/${MODEL_ID}:generateContent`;
+  const endpoint = buildVertexGenerateContentEndpoint({
+    projectId: PROJECT_ID,
+    ...HUSHH_PROFILE_SEARCH_VERTEX_CONFIG,
+  });
   
   // Enhanced request with Chain-of-Thought Reasoning via Prompt Engineering
-  // Note: thinkingConfig is not yet supported on gemini-3-pro-preview via Vertex AI
+  // Note: thinkingConfig is not yet supported on this Vertex AI model path
   // We achieve similar results through detailed prompt instructions for mathematical reasoning
   const requestBody = {
     contents: [{
@@ -444,7 +443,7 @@ const callVertexAI = async (prompt: string): Promise<any> => {
     }],
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 16384,  // Increased for detailed reasoning + response
+      maxOutputTokens: 8192,  // Model max for gemini-2.0-flash-001
       // System 2 Thinking: Achieved through prompt engineering with explicit
       // reasoning trace requirements in the prompt itself
     },

@@ -3,12 +3,31 @@
 // Performs comprehensive profile enrichment via OSINT techniques
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import {
+  buildVertexGenerateContentEndpoint,
+  SHADOW_INVESTIGATOR_VERTEX_CONFIG,
+} from "../_shared/vertexEndpoints.ts";
+import {
+  createShadowInvestigatorUnauthorizedResponse,
+  createShadowInvestigatorUpstreamErrorResponse,
+} from "./httpResponses.ts";
 
 // Vertex AI Configuration
 const PROJECT_ID = Deno.env.get("GCP_PROJECT_ID") || "hushone-app";
-const MODEL_ID = "gemini-3-pro-preview"; // Gemini 3 Pro Preview for deep reasoning
-const VERTEX_AI_LOCATION = "global"; // Using global location for latest model availability
+
+class VertexApiError extends Error {
+  status: number;
+  detail: string;
+
+  constructor(status: number, detail: string) {
+    super(`Vertex AI API error: ${status}`);
+    this.name = "VertexApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
 
 // ============ Types ============
 
@@ -659,7 +678,10 @@ AI_SENTIMENT: [One word summary]
 `;
 
   const accessToken = await getAccessToken();
-  const endpoint = `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${VERTEX_AI_LOCATION}/publishers/google/models/${MODEL_ID}:generateContent`;
+  const endpoint = buildVertexGenerateContentEndpoint({
+    projectId: PROJECT_ID,
+    ...SHADOW_INVESTIGATOR_VERTEX_CONFIG,
+  });
 
   const requestBody = {
     contents: [{
@@ -697,7 +719,7 @@ AI_SENTIMENT: [One word summary]
   if (!response.ok) {
     const errorText = await response.text();
     console.error("Vertex AI Error:", errorText);
-    throw new Error(`Vertex AI API error: ${response.status}`);
+    throw new VertexApiError(response.status, errorText);
   }
 
   const responseData = await response.json();
@@ -740,6 +762,48 @@ serve(async (req: Request) => {
       );
     }
 
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return createShadowInvestigatorUnauthorizedResponse(corsHeaders);
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Shadow Investigator auth is not configured: missing Supabase env");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Server authentication configuration is missing",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+    });
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error("Shadow Investigator auth error:", authError);
+      return createShadowInvestigatorUnauthorizedResponse(
+        corsHeaders,
+        "Unauthorized - invalid or expired session",
+      );
+    }
+
     const body: SearchParams = await req.json();
 
     if (!body.name || !body.email) {
@@ -763,6 +827,14 @@ serve(async (req: Request) => {
     );
 
   } catch (error) {
+    if (error instanceof VertexApiError) {
+      console.error("Shadow Investigator Vertex Error:", {
+        status: error.status,
+        detail: error.detail,
+      });
+      return createShadowInvestigatorUpstreamErrorResponse(corsHeaders);
+    }
+
     console.error("Shadow Investigator Error:", error);
 
     return new Response(

@@ -43,11 +43,12 @@ const HushhUserProfilePage: React.FC = () => {
     hasOnboardingData, isApplePassLoading, isGooglePassLoading, nwsResult, nwsLoading,
     hasCopied, onCopy, profileUrl, navigate,
     handleChange, handleBack, handleSave,
+    handleRetryShadow,
     isDirty, isSaving, handleSaveChanges,
     handleAppleWalletPass, handleGoogleWalletPass, COUNTRIES,
     editingField, setEditingField, FIELD_OPTIONS, MULTI_SELECT_FIELDS,
     handleUpdateAIField, handleMultiSelectToggle, getConfidenceLabel, getConfidenceBadgeClass,
-    shadowProfile, shadowConfidenceLabel, shadowLifestyleTags, shadowBrandTags, shadowKnownForTags,
+    shadowProfile, shadowLoading, shadowErrorMessage, shadowConfidenceLabel, shadowLifestyleTags, shadowBrandTags, shadowKnownForTags,
   } = useHushhUserProfileLogic();
 
   const firstName = form.name?.split(" ")[0] || "Investor";
@@ -144,7 +145,7 @@ const HushhUserProfilePage: React.FC = () => {
             Hushh AI automatically detects your investment preferences and risk
             appetite to tailor opportunities specifically for you.
           </p>
-          <HushhTechCta variant={HushhTechCtaVariant.BLACK} onClick={handleSave} disabled={loading}>
+          <HushhTechCta variant={HushhTechCtaVariant.BLACK} onClick={handleSave} disabled={loading || isProcessing}>
             {loading
               ? `Generating... ${loadingSeconds}s`
               : investorProfile
@@ -155,6 +156,35 @@ const HushhUserProfilePage: React.FC = () => {
             <span className="material-symbols-outlined text-lg">auto_awesome</span>
           </HushhTechCta>
         </section>
+
+        {shadowStatus === 'error' && (
+          <section className="mb-10 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <span className="text-[10px] uppercase tracking-[0.2em] text-amber-700 font-medium">
+                Shadow Profile Needs Attention
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.14em] text-amber-700/80 font-medium">
+                {shadowProfile ? 'Showing Saved Data' : 'Not Generated'}
+              </span>
+            </div>
+            <p className="text-sm text-amber-900 leading-relaxed">
+              {shadowErrorMessage || 'Shadow profile generation failed. Please try again.'}
+            </p>
+            {shadowProfile && (
+              <p className="text-xs text-amber-800/80 mt-2">
+                Your previous shadow profile is still visible below while you retry.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={handleRetryShadow}
+              disabled={shadowLoading || shadowStatus === 'running'}
+              className="mt-4 inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-medium tracking-[0.14em] uppercase text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {shadowLoading ? 'Retrying…' : 'Retry Shadow Analysis'}
+            </button>
+          </section>
+        )}
 
         {/* ── AI-Generated Investment Profile ── */}
         {investorProfile && Object.keys(investorProfile).length > 0 && (
