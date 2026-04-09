@@ -11,6 +11,7 @@ import {
   ModalHeader,
   ModalOverlay,
   Text,
+  useBreakpointValue,
   VStack,
 } from "@chakra-ui/react";
 import { QRCodeSVG } from "qrcode.react";
@@ -34,6 +35,16 @@ interface WalletCardPreviewModalProps {
   isGooglePassLoading?: boolean;
 }
 
+function formatPreviewMembershipId(membershipId: string) {
+  const trimmedMembershipId = membershipId.trim();
+
+  if (trimmedMembershipId.length <= 28) {
+    return trimmedMembershipId;
+  }
+
+  return `${trimmedMembershipId.slice(0, 18)}…${trimmedMembershipId.slice(-6)}`;
+}
+
 export default function WalletCardPreviewModal({
   isOpen,
   onClose,
@@ -49,6 +60,8 @@ export default function WalletCardPreviewModal({
 }: WalletCardPreviewModalProps) {
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
   const [reducedMotion, setReducedMotion] = useState(false);
+  const qrFrameSize = useBreakpointValue({ base: 98, sm: 112, md: 128 }) ?? 98;
+  const qrPadding = useBreakpointValue({ base: 9, sm: 10, md: 12 }) ?? 9;
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -72,6 +85,9 @@ export default function WalletCardPreviewModal({
   if (!preview) {
     return null;
   }
+
+  const previewMembershipId = formatPreviewMembershipId(preview.membershipId);
+  const qrSize = qrFrameSize - qrPadding * 2;
 
   const handleMouseMove = (event: MouseEvent<HTMLDivElement>) => {
     if (reducedMotion) {
@@ -97,19 +113,22 @@ export default function WalletCardPreviewModal({
       <ModalContent
         mx={{ base: 0, md: 4 }}
         my={{ base: 0, md: 8 }}
+        maxW={{ base: "100vw", md: "min(100vw - 2rem, 64rem)" }}
         borderRadius={{ base: 0, md: "28px" }}
         bg="#F8F5EC"
         overflow="hidden"
       >
-        <ModalHeader pb={1}>Preview Card</ModalHeader>
+        <ModalHeader pb={{ base: 1, md: 2 }} fontSize={{ base: "2xl", md: "3xl" }}>
+          Preview Card
+        </ModalHeader>
         <ModalCloseButton />
-        <ModalBody pb={8}>
-          <VStack spacing={6} align="stretch">
-            <VStack spacing={1} align="stretch">
-              <Text fontSize="sm" color="gray.600">
+        <ModalBody px={{ base: 4, md: 6 }} pb={{ base: 6, md: 8 }}>
+          <VStack spacing={{ base: 4, md: 6 }} align="stretch">
+            <VStack spacing={{ base: 1.5, md: 1 }} align="stretch">
+              <Text fontSize={{ base: "md", md: "lg" }} color="gray.600">
                 This is a browser preview of your Hushh Gold Wallet card.
               </Text>
-              <Text fontSize="xs" color="gray.500">
+              <Text fontSize={{ base: "sm", md: "md" }} color="gray.500">
                 Add to Apple Wallet stays device-aware. Google Wallet appears only when the pass generator is healthy.
               </Text>
             </VStack>
@@ -129,11 +148,11 @@ export default function WalletCardPreviewModal({
                 <Box
                   position="relative"
                   mx="auto"
-                  maxW="460px"
+                  w="min(100%, 32rem)"
                   aspectRatio={1.586}
                   borderRadius="28px"
-                  px={{ base: 5, md: 7 }}
-                  py={{ base: 5, md: 6 }}
+                  px={{ base: 4, sm: 5, md: 6 }}
+                  py={{ base: 4, sm: 5, md: 6 }}
                   bgGradient="linear(135deg, #443317 0%, #8D6B2F 34%, #D4AF37 62%, #8A6124 100%)"
                   color="#0B1120"
                   border="1px solid rgba(255,255,255,0.35)"
@@ -154,97 +173,159 @@ export default function WalletCardPreviewModal({
                     pointerEvents="none"
                   />
 
-                  <VStack align="stretch" h="100%" justify="space-between" spacing={4}>
-                    <HStack justify="space-between" align="flex-start">
-                      <VStack align="flex-start" spacing={1}>
-                        <Text
-                          fontSize="xs"
-                          letterSpacing="0.36em"
-                          fontWeight="700"
-                          color="rgba(11, 17, 32, 0.58)"
-                        >
-                          {preview.badgeText}
-                        </Text>
-                        <Text fontSize={{ base: "sm", md: "md" }} fontWeight="600">
-                          {preview.title}
-                        </Text>
-                      </VStack>
-                      <Box
-                        px={3}
-                        py={1.5}
-                        borderRadius="999px"
-                        bg="rgba(255,255,255,0.18)"
-                        border="1px solid rgba(255,255,255,0.28)"
-                        backdropFilter="blur(8px)"
-                      >
-                        <Text fontSize="10px" fontWeight="700" letterSpacing="0.12em">
-                          GOLD MEMBER
-                        </Text>
-                      </Box>
-                    </HStack>
-
-                    <VStack align="flex-start" spacing={1}>
+                  <Box
+                    display="grid"
+                    h="100%"
+                    gridTemplateColumns="minmax(0, 1fr) auto"
+                    gridTemplateRows="auto minmax(0, 1fr) auto"
+                    columnGap={{ base: 3, md: 4 }}
+                    rowGap={{ base: 3, md: 4 }}
+                  >
+                    <VStack align="flex-start" spacing={{ base: 1, md: 1.5 }} minW={0}>
                       <Text
-                        fontSize={{ base: "2xl", md: "3xl" }}
+                        fontSize="clamp(0.7rem, 0.58rem + 0.5vw, 0.9rem)"
+                        letterSpacing="clamp(0.18em, 0.12em + 0.3vw, 0.34em)"
+                        fontWeight="700"
+                        color="rgba(11, 17, 32, 0.58)"
+                        noOfLines={1}
+                      >
+                        {preview.badgeText}
+                      </Text>
+                      <Text
+                        fontSize="clamp(0.95rem, 0.82rem + 0.7vw, 1.5rem)"
+                        fontWeight="600"
+                        lineHeight="1.1"
+                        noOfLines={2}
+                      >
+                        {preview.title}
+                      </Text>
+                    </VStack>
+                    <Box
+                      justifySelf="end"
+                      alignSelf="start"
+                      px={{ base: 2.5, sm: 3, md: 4 }}
+                      py={{ base: 1.5, md: 2 }}
+                      borderRadius="999px"
+                      bg="rgba(255,255,255,0.18)"
+                      border="1px solid rgba(255,255,255,0.28)"
+                      backdropFilter="blur(8px)"
+                      maxW={{ base: "9.5rem", md: "10.75rem" }}
+                    >
+                      <Text
+                        fontSize="clamp(0.62rem, 0.56rem + 0.26vw, 0.84rem)"
+                        fontWeight="700"
+                        letterSpacing="0.12em"
+                        textAlign="center"
+                        noOfLines={1}
+                      >
+                        GOLD MEMBER
+                      </Text>
+                    </Box>
+
+                    <VStack
+                      gridColumn="1"
+                      gridRow="2"
+                      align="flex-start"
+                      justify="center"
+                      spacing={{ base: 1, md: 1.5 }}
+                      minW={0}
+                    >
+                      <Text
+                        fontSize="clamp(1.7rem, 1.05rem + 3vw, 3.35rem)"
                         fontWeight="700"
                         color="rgba(11, 17, 32, 0.9)"
                         textShadow="0 1px 0 rgba(255, 255, 255, 0.55)"
+                        lineHeight="0.98"
+                        noOfLines={2}
                       >
                         {preview.holderName}
                       </Text>
-                      <Text fontSize="sm" color="rgba(11, 17, 32, 0.7)">
+                      <Text
+                        fontSize="clamp(0.9rem, 0.76rem + 0.65vw, 1.2rem)"
+                        color="rgba(11, 17, 32, 0.74)"
+                        noOfLines={1}
+                      >
                         {preview.organizationName}
                       </Text>
-                      <Text fontSize="xs" fontWeight="600" color="rgba(11, 17, 32, 0.66)">
-                        Membership ID · {preview.membershipId}
+                      <Text
+                        data-testid="wallet-preview-membership-id"
+                        fontSize="clamp(0.72rem, 0.66rem + 0.3vw, 0.96rem)"
+                        fontWeight="600"
+                        color="rgba(11, 17, 32, 0.68)"
+                        noOfLines={1}
+                      >
+                        Membership ID · {previewMembershipId}
                       </Text>
                     </VStack>
 
-                    <HStack align="flex-end" justify="space-between" spacing={4}>
-                      <VStack align="flex-start" spacing={2}>
-                        <Box
-                          px={3}
-                          py={1.5}
-                          borderRadius="999px"
-                          bg="rgba(255,255,255,0.16)"
-                          border="1px solid rgba(255,255,255,0.24)"
-                        >
-                          <Text fontSize="11px" fontWeight="700">
-                            Investor - {preview.investmentClass}
-                          </Text>
-                        </Box>
-                        <Text fontSize="xs" color="rgba(11, 17, 32, 0.7)">
-                          {preview.email}
-                        </Text>
-                      </VStack>
+                    <VStack
+                      gridColumn="1"
+                      gridRow="3"
+                      align="flex-start"
+                      justify="flex-end"
+                      spacing={{ base: 1.5, md: 2 }}
+                      minW={0}
+                    >
                       <Box
-                        bg="whiteAlpha.900"
-                        borderRadius="18px"
-                        p={3}
-                        boxShadow="0 10px 24px rgba(15, 23, 42, 0.16)"
+                        px={{ base: 2.5, md: 3 }}
+                        py={{ base: 1.5, md: 2 }}
+                        borderRadius="999px"
+                        bg="rgba(255,255,255,0.16)"
+                        border="1px solid rgba(255,255,255,0.24)"
+                        maxW="100%"
                       >
+                        <Text
+                          fontSize="clamp(0.65rem, 0.6rem + 0.24vw, 0.88rem)"
+                          fontWeight="700"
+                          noOfLines={1}
+                        >
+                          Investor - {preview.investmentClass}
+                        </Text>
+                      </Box>
+                      <Text
+                        fontSize="clamp(0.74rem, 0.69rem + 0.24vw, 0.95rem)"
+                        color="rgba(11, 17, 32, 0.7)"
+                        noOfLines={1}
+                      >
+                        {preview.email}
+                      </Text>
+                    </VStack>
+
+                    <Box
+                      gridColumn="2"
+                      gridRow="3"
+                      justifySelf="end"
+                      alignSelf="end"
+                      data-testid="wallet-preview-qr"
+                      boxSize={`${qrFrameSize}px`}
+                      bg="whiteAlpha.920"
+                      borderRadius={{ base: "18px", md: "22px" }}
+                      p={`${qrPadding}px`}
+                      boxShadow="0 10px 24px rgba(15, 23, 42, 0.16)"
+                    >
+                      <Box boxSize={`${qrSize}px`}>
                         <QRCodeSVG
                           value={preview.qrValue}
-                          size={76}
+                          size={qrSize}
                           bgColor="#FFFFFF"
                           fgColor="#0B1120"
                           level="M"
                           includeMargin={false}
                         />
                       </Box>
-                    </HStack>
-                  </VStack>
+                    </Box>
+                  </Box>
                 </Box>
               </Box>
             </Box>
 
-            <HStack
-              spacing={3}
-              align="stretch"
-              flexDir={{ base: "column", sm: "row" }}
+            <Box
+              display="grid"
+              gap={3}
+              gridTemplateColumns={{ base: "1fr", md: "repeat(2, minmax(0, 1fr))" }}
+              alignItems="stretch"
             >
               <Box
-                flex="1"
                 borderRadius="20px"
                 border="1px solid rgba(15,23,42,0.08)"
                 bg="white"
@@ -260,9 +341,24 @@ export default function WalletCardPreviewModal({
                 <Text fontSize="xs" color="gray.600">
                   This preview mirrors the same holder, class, member ID, and QR data used for the live pass.
                 </Text>
+                <VStack mt={3} spacing={1.5} align="stretch">
+                  <Text
+                    fontSize="xs"
+                    color="gray.700"
+                    overflowWrap="anywhere"
+                  >
+                    Full membership ID · {preview.membershipId}
+                  </Text>
+                  <Text
+                    fontSize="xs"
+                    color="gray.600"
+                    overflowWrap="anywhere"
+                  >
+                    Email · {preview.email}
+                  </Text>
+                </VStack>
               </Box>
               <Box
-                flex="1"
                 borderRadius="20px"
                 border="1px solid rgba(15,23,42,0.08)"
                 bg="white"
@@ -275,11 +371,16 @@ export default function WalletCardPreviewModal({
                     Profile Link
                   </Text>
                 </HStack>
-                <Text fontSize="xs" color="gray.600" noOfLines={2}>
+                <Text
+                  data-testid="wallet-preview-profile-url"
+                  fontSize="xs"
+                  color="gray.600"
+                  overflowWrap="anywhere"
+                >
                   {preview.profileUrl}
                 </Text>
               </Box>
-            </HStack>
+            </Box>
 
             <Divider borderColor="blackAlpha.200" />
 

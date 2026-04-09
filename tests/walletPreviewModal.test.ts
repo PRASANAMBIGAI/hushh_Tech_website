@@ -12,6 +12,9 @@ import theme from "../src/theme";
 describe("WalletCardPreviewModal", () => {
   let container: HTMLDivElement;
   let root: Root;
+  type WalletCardPreviewModalProps = React.ComponentProps<
+    typeof WalletCardPreviewModal
+  >;
 
   const preview = {
     badgeText: "HUSHH GOLD",
@@ -24,52 +27,56 @@ describe("WalletCardPreviewModal", () => {
     qrValue: "https://hushhtech.com/investor/test-user",
     profileUrl: "https://hushhtech.com/investor/test-user",
   };
+  const longPreview = {
+    ...preview,
+    holderName: "Ankit Kumar Singh the Third of Hushh Capital Partners",
+    membershipId: "ankit-kumar-singh-premier-member-2597e6b8",
+    profileUrl:
+      "https://hushhtech.com/investor/ankit-kumar-singh-premier-member-2597e6b8",
+  };
 
-  beforeEach(() => {
-    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-  });
-
-  afterEach(async () => {
-    await act(async () => {
-      root.unmount();
+  const setViewport = (width: number, height: number) => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: width,
     });
-    container.remove();
-    vi.restoreAllMocks();
-  });
-
-  it("shows Apple add action when Apple Wallet is supported", async () => {
-    await act(async () => {
-      root.render(
-        React.createElement(
-          ChakraProvider,
-          { theme },
-          React.createElement(WalletCardPreviewModal, {
-            isOpen: true,
-            onClose: () => undefined,
-            preview,
-            appleWalletSupported: true,
-            appleWalletSupportMessage:
-              "Available on iPhone in Wallet-supported browsers.",
-            onAddToAppleWallet: () => undefined,
-            googleWalletAvailable: false,
-            googleWalletSupportMessage:
-              "Google Wallet is temporarily unavailable while we finish the wallet issuer setup.",
-          })
-        )
-      );
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: height,
     });
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => {
+        const prefersReducedMotion =
+          query.includes("prefers-reduced-motion") && query.includes("reduce");
+        const minWidthMatch = query.match(/min-width:\s*(\d+)px/);
+        const maxWidthMatch = query.match(/max-width:\s*(\d+)px/);
+        const matchesMin = minWidthMatch
+          ? width >= Number(minWidthMatch[1])
+          : true;
+        const matchesMax = maxWidthMatch
+          ? width <= Number(maxWidthMatch[1])
+          : true;
+        const matches = prefersReducedMotion ? false : matchesMin && matchesMax;
 
-    expect(document.body.textContent).toContain("Preview Card");
-    expect(document.body.textContent).toContain("Add to Apple Wallet");
-    expect(document.body.textContent).toContain(
-      "Google Wallet is temporarily unavailable"
-    );
-  });
+        return {
+          matches,
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        };
+      }),
+    });
+  };
 
-  it("shows helper copy instead of the Apple add action when unsupported", async () => {
+  const renderModal = async (
+    overrides: Partial<WalletCardPreviewModalProps> = {}
+  ) => {
     await act(async () => {
       root.render(
         React.createElement(
@@ -85,10 +92,44 @@ describe("WalletCardPreviewModal", () => {
             googleWalletAvailable: false,
             googleWalletSupportMessage:
               "Google Wallet is temporarily unavailable while we finish the wallet issuer setup.",
+            ...overrides,
           })
         )
       );
     });
+  };
+
+  beforeEach(() => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    setViewport(390, 844);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+    vi.restoreAllMocks();
+  });
+
+  it("shows Apple add action when Apple Wallet is supported", async () => {
+    await renderModal({
+      appleWalletSupported: true,
+      onAddToAppleWallet: () => undefined,
+    });
+
+    expect(document.body.textContent).toContain("Preview Card");
+    expect(document.body.textContent).toContain("Add to Apple Wallet");
+    expect(document.body.textContent).toContain(
+      "Google Wallet is temporarily unavailable"
+    );
+  });
+
+  it("shows helper copy instead of the Apple add action when unsupported", async () => {
+    await renderModal();
 
     expect(document.body.textContent).toContain(
       "Available on iPhone in Wallet-supported browsers."
@@ -98,5 +139,49 @@ describe("WalletCardPreviewModal", () => {
     ).map((button) => button.textContent?.trim() || "");
 
     expect(buttonLabels).not.toContain("Add to Apple Wallet");
+  });
+
+  it("keeps the card bounded and shortens long membership ids only inside the preview card", async () => {
+    await renderModal({
+      preview: longPreview,
+      appleWalletSupported: true,
+      onAddToAppleWallet: () => undefined,
+    });
+
+    const mobileQrNode = document.querySelector(
+      '[data-testid="wallet-preview-qr"] svg'
+    );
+    const membershipPreview = document.querySelector(
+      '[data-testid="wallet-preview-membership-id"]'
+    );
+    const profileUrlDetails = document.querySelector(
+      '[data-testid="wallet-preview-profile-url"]'
+    );
+
+    expect(mobileQrNode).not.toBeNull();
+    expect(membershipPreview?.textContent).toContain("Membership ID · ");
+    expect(membershipPreview?.textContent).toContain("…");
+    expect(membershipPreview?.textContent).toContain("2597e6b8".slice(-6));
+    expect(document.body.textContent).toContain(
+      `Full membership ID · ${longPreview.membershipId}`
+    );
+    expect(profileUrlDetails?.textContent).toContain(longPreview.profileUrl);
+
+    setViewport(1280, 900);
+    await renderModal({
+      preview: longPreview,
+      appleWalletSupported: true,
+      onAddToAppleWallet: () => undefined,
+    });
+
+    const desktopQrNode = document.querySelector(
+      '[data-testid="wallet-preview-qr"] svg'
+    );
+
+    expect(desktopQrNode).not.toBeNull();
+    expect(document.body.textContent).toContain("Add to Apple Wallet");
+    expect(document.body.textContent).toContain(
+      "Google Wallet is temporarily unavailable"
+    );
   });
 });
