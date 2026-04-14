@@ -292,17 +292,6 @@ export default function WalletCardPreviewModal({
                     mixBlendMode="screen"
                     pointerEvents="none"
                   />
-                  {/* Top edge highlight — polished metal edge */}
-                  <Box
-                    position="absolute"
-                    left="4%"
-                    right="4%"
-                    top="6.5%"
-                    h="1px"
-                    bg="rgba(255,248,220,0.9)"
-                    boxShadow="0 0 24px rgba(255,235,160,0.5), 0 0 6px rgba(255,248,220,0.6)"
-                    pointerEvents="none"
-                  />
 
                   <Box
                     display="grid"
@@ -317,17 +306,16 @@ export default function WalletCardPreviewModal({
                         fontSize="clamp(0.7rem, 0.58rem + 0.5vw, 0.9rem)"
                         letterSpacing="clamp(0.22em, 0.14em + 0.3vw, 0.34em)"
                         fontWeight="800"
-                        color="#1A1000"
-                        textShadow="0 1px 0 rgba(255,240,190,0.4)"
+                        color="#000000"
                         noOfLines={1}
                       >
                         {preview.badgeText}
                       </Text>
                       <Text
                         fontSize="clamp(0.62rem, 0.56rem + 0.22vw, 0.78rem)"
-                        fontWeight="600"
+                        fontWeight="700"
                         letterSpacing="0.04em"
-                        color="#2D1E08"
+                        color="#000000"
                         noOfLines={1}
                       >
                         {preview.title}
@@ -372,8 +360,7 @@ export default function WalletCardPreviewModal({
                         fontWeight="700"
                         letterSpacing="0.12em"
                         textTransform="uppercase"
-                        color="#2D1E08"
-                        textShadow="0 1px 0 rgba(255,240,190,0.3)"
+                        color="#000000"
                         noOfLines={1}
                       >
                         {preview.organizationName}
@@ -382,8 +369,7 @@ export default function WalletCardPreviewModal({
                         data-testid="wallet-preview-holder-name"
                         fontSize={holderNameTypography.fontSize}
                         fontWeight="700"
-                        color="#0F0A03"
-                        textShadow="0 1px 0 rgba(255, 240, 190, 0.35), 0 -1px 0 rgba(80, 55, 14, 0.08)"
+                        color="#000000"
                         lineHeight={holderNameTypography.lineHeight}
                         minH={holderNameTypography.minHeight}
                         noOfLines={2}
@@ -425,11 +411,10 @@ export default function WalletCardPreviewModal({
                       <Text
                         data-testid="wallet-preview-email"
                         fontSize="clamp(0.66rem, 0.62rem + 0.22vw, 0.82rem)"
-                        fontWeight="600"
+                        fontWeight="700"
                         letterSpacing="0.03em"
-                        color="#1A1000"
+                        color="#000000"
                         noOfLines={1}
-                        textShadow="0 1px 0 rgba(255,240,190,0.3)"
                       >
                         {preview.email}
                       </Text>
